@@ -1,0 +1,16 @@
+update_gas_reading:
+  name: Update Gas Reading
+  description: Update the current gas meter reading (in m³)
+  fields:
+    reading:
+      name: Reading
+      description: Current gas meter reading in m³
+      required: true
+      example: 13500.5
+      selector:
+        number:
+          min: 0
+          max: 999999
+          step: 0.001
+          mode: box
+          unit_of_measurement: "m³"

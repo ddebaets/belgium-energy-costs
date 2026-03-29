@@ -1,0 +1,13 @@
+{
+  "domain": "belgium_energy_costs",
+  "name": "Belgium Energy Costs",
+  "codeowners": ["@ddebaets"],
+  "config_flow": true,
+  "documentation": "https://github.com/ddebaets/belgium-energy-costs",
+  "issue_tracker": "https://github.com/ddebaets/belgium-energy-costs/issues",
+  "requirements": [],
+  "dependencies": [],
+  "after_dependencies": ["hass_engie_be"],
+  "version": "5.2.0",
+  "iot_class": "calculated"
+}

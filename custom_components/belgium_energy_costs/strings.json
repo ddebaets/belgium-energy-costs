@@ -1,0 +1,42 @@
+{
+  "title": "Belgium Energy Costs",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select Your Region",
+        "description": "Choose your region in Belgium. This determines grid operator and default values.",
+        "data": {
+          "region": "Region"
+        }
+      },
+      "contract_date": {
+        "title": "Contract Start Date",
+        "description": "Enter the start date of your current energy contract.\n\n{note}",
+        "data": {
+          "contract_start_date": "Contract Start Date"
+        }
+      }
+    },
+    "error": {
+      "engie_not_found": "ENGIE Belgium integration not found. Please install and configure hass-engie-be first.",
+      "region_not_supported": "The {region_name} region ({grid_operator}) is not yet supported. We need community contributions for regional cost data. You can still proceed, but cost calculations may not be accurate for your region. Please consider contributing your contract details on GitHub!",
+      "entity_not_found": "The specified entity was not found. Please check the entity ID."
+    },
+    "abort": {
+      "already_configured": "Belgium Energy Costs is already configured.",
+      "gas_not_enabled": "Gas is not enabled in your configuration."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Belgium Energy Costs Options",
+        "menu_options": {
+          "electricity_costs": "Update Electricity Costs",
+          "gas_costs": "Update Gas Costs",
+          "gas_reading": "Update Gas Meter Reading"
+        }
+      }
+    }
+  }
+}
