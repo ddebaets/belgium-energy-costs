@@ -8,14 +8,9 @@ on:
 
 jobs:
   validate:
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
-        uses: "actions/checkout@v4"
+        uses: actions/checkout@v4
       - name: Hassfest validation
-        uses: "home-assistant/actions/hassfest@master"
-```
-
-**Commit message:**
-```
-Fix YAML indentation
+        uses: home-assistant/actions/hassfest@master
