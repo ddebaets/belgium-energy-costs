@@ -19,4 +19,4 @@ jobs:
 
 **Commit message:**
 ```
-Add HACS validation action
+Fix YAML indentation
