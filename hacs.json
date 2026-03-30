@@ -1,7 +1,4 @@
 {
   "name": "Belgium Energy Costs",
-  "render_readme": true,
-  "domains": ["sensor"],
-  "iot_class": "calculated",
-  "homeassistant": "2024.1.0"
+  "render_readme": true
 }
