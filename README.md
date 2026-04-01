@@ -80,101 +80,6 @@ We need community contributions to support all Belgian regions! If you live in F
 **Optional:**
 3. Solar panels with export tracking
 
-## Installation
-
-### HACS (Recommended)
-
-1. Open HACS → Integrations
-2. Click ⋮ (three dots) → Custom repositories
-3. Add repository: `https://github.com/ddebaets/belgium-energy-costs`
-4. Category: `Integration`
-5. Click **Belgium Energy Costs** → Install
-6. Restart Home Assistant
-
-### Manual
-
-1. Copy `custom_components/belgium_energy_costs` to your HA `custom_components` directory
-2. Restart Home Assistant
-
-## Configuration
-
-Add to `configuration.yaml`:
-
-### Example 1: Bi-horaire Electricity + Gas + Solar
-
-```yaml
-belgium_energy_costs:
-  contract_start_date: "2025-06-03"
-  
-  electricity:
-    meter_type: bi_horaire  # or "single" for single tariff
-    
-    # Consumption (import)
-    import:
-      p1_sensors:
-        peak: sensor.p1_meter_energy_import_tariff_1
-        offpeak: sensor.p1_meter_energy_import_tariff_2
-      baseline_readings:  # Your meter readings at contract start
-        peak: 7471
-        offpeak: 9331
-    
-    # Solar production (export) - OPTIONAL
-    export:
-      enabled: true
-      p1_sensors:
-        total: sensor.p1_meter_energy_export_total
-      baseline_readings:
-        total: 1250
-    
-    # Fixed costs (from your ENGIE contract pages 21-22)
-    costs:
-      green_certificates: 0.0275      # EUR/kWh
-      distribution_peak: 0.0941       # EUR/kWh
-      distribution_offpeak: 0.0706    # EUR/kWh
-      transmission: 0.0225            # EUR/kWh
-      cotisation: 0.00204             # EUR/kWh
-      accise_federale: 0.05033        # EUR/kWh
-      fixed_monthly: 14.05            # EUR/month
-  
-  gas:
-    enabled: true
-    baseline_reading_m3: 12096        # Your gas meter at contract start
-    conversion_factor: 11.2           # kWh/m³ (Brussels/SIBELGA: 11.2)
-    costs:  # From your ENGIE contract pages 25-26
-      distribution: 0.01949           # EUR/kWh
-      transmission: 0.00165           # EUR/kWh
-      cotisation: 0.00106             # EUR/kWh
-      accise_federale: 0.00872        # EUR/kWh
-      fixed_monthly: 7.57             # EUR/month
-```
-
-### Example 2: Single Tariff Electricity, No Gas, No Solar
-
-```yaml
-belgium_energy_costs:
-  contract_start_date: "2024-01-01"
-  
-  electricity:
-    meter_type: single
-    
-    import:
-      p1_sensors:
-        total: sensor.p1_meter_energy_import_total
-      baseline_readings:
-        total: 15420
-    
-    costs:
-      green_certificates: 0.0275
-      distribution: 0.0823            # Single tariff uses "distribution" not "distribution_peak"
-      transmission: 0.0225
-      cotisation: 0.00204
-      accise_federale: 0.05033
-      fixed_monthly: 14.05
-  
-  gas:
-    enabled: false
-```
-
 ## Sensors Created
 
 ### Always Created:
@@ -257,14 +162,6 @@ When your new energy contract arrives (typically June):
 4. Enter new values from contract (pages 21-22 for electricity, 25-26 for gas)
 5. Submit ✅
 6. Sensors update immediately!
-
-### Via YAML (Alternative)
-1. Open `configuration.yaml`
-2. Find the `belgium_energy_costs:` section
-3. Update the cost values from your new contract
-4. Save
-5. **Developer Tools → YAML → Check Configuration**
-6. Restart Home Assistant
 
 ## Energy Dashboard Integration
 
