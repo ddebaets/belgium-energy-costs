@@ -140,7 +140,7 @@ data:
 
 ## Updating Annual Costs
 
-When your new ENGIE contract arrives (typically each June):
+When your new ENGIE contract arrives:
 
 Settings → Devices & Services → Belgium Energy Costs → Configure → ⚡ Update Electricity Costs *or* 🔥 Update Gas Costs
 
