@@ -1,184 +1,199 @@
 # Belgium Energy Costs
 
-Complete energy cost tracking for Belgium, combining variable supplier prices with regional fixed costs (distribution, transmission, taxes).
+A Home Assistant custom integration that tracks **real-time total energy costs** for Belgian households, combining variable supplier prices from the [hass-engie-be](https://github.com/myTselection/hass-engie-be) integration with the fixed distribution, transmission, and tax components specific to your Belgian grid operator.
 
 ## Features
 
-✅ **Total Real Costs** - Combines variable energy prices (from your supplier integration) with all fixed costs (distribution, transmission, taxes, monthly fees)  
-✅ **Consumption Tracking** - Tracks electricity and gas consumption since contract start  
-✅ **Solar Export Support** - Calculates injection revenue and net electricity costs  
-✅ **Annual Projections** - Estimates yearly energy costs based on consumption patterns  
-✅ **Bi-horaire Support** - Full support for day/night tariff meters  
-✅ **Auto-Updates** - Variable prices fetched automatically from hass-engie-be integration  
-✅ **Multi-Region** - Designed for all Belgian regions (Brussels fully supported)
+- ⚡ **Real electricity costs** — variable ENGIE price + green certificates + distribution + transmission + taxes, per kWh
+- 🔥 **Real gas costs** — variable ENGIE price + distribution + transmission + taxes, per kWh
+- 📊 **Consumption tracking** — electricity (peak/off-peak or single) and gas since contract start
+- ☀️ **Solar export support** — injection revenue and net electricity cost
+- 📅 **Separate contract dates** — electricity and gas contracts can start on different dates
+- 📈 **Monthly averages & annual projections** — extrapolated from actual consumption
+- 🔄 **Event-driven, not polled** — sensors update instantly when P1 meter or ENGIE prices change
+- ⚡ **Debounced batch updates** — rapid P1 meter ticks are absorbed and flushed as a single batch (5 s window), reducing HA event-loop pressure
+- 🌍 **Multi-region** — Brussels (fully supported), Flanders and Wallonia (community contributions welcome)
 
 ## Supported Regions
 
-The integration is designed to work across all Belgian regions, with region-specific defaults for gas conversion factors and grid operators.
-
-### Current Status:
-
 | Region | Grid Operator | Status | Gas Conversion |
 |--------|---------------|--------|----------------|
-| **🟢 Brussels** | SIBELGA | ✅ **Fully Supported** | 11.2 kWh/m³ |
-| **🟡 Flanders** | Fluvius | ⚠️ **Coming Soon** | ~11.0 kWh/m³ |
-| **🟡 Wallonia** | ORES/RESA/AIEG/AIESH | ⚠️ **Coming Soon** | ~11.0 kWh/m³ |
+| 🟢 **Brussels** | SIBELGA | ✅ Fully Supported | 11.2 kWh/m³ |
+| 🟡 **Flanders** | Fluvius | ⚠️ Coming Soon | ~11.0 kWh/m³ |
+| 🟡 **Wallonia** | ORES/RESA/AIEG/AIESH | ⚠️ Coming Soon | ~11.0 kWh/m³ |
 
-### Brussels (SIBELGA) - ✅ Fully Supported
-Complete support with verified cost structures and defaults. All features tested and working.
+> **Help wanted!** If you're in Flanders or Wallonia, please [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details (pages 21–22 for electricity, 25–26 for gas) so we can add verified defaults for your region.
 
-### Flanders (Fluvius) - ⚠️ Coming Soon
-Basic support available, but regional cost defaults need community verification. The integration will work, but you'll need to manually verify cost values from your contract match Flanders-specific rates.
+## Prerequisites
 
-**Help wanted!** If you're in Flanders, please [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details (pages 21-22 for electricity, 25-26 for gas) so we can add verified defaults.
-
-### Wallonia (ORES/RESA/AIEG/AIESH) - ⚠️ Coming Soon  
-Basic support available, but regional cost defaults need community verification. The integration will work, but you'll need to manually verify cost values from your contract match Wallonia-specific rates.
-
-**Help wanted!** If you're in Wallonia, please [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details so we can add verified defaults.
-
-### Want to Help?
-We need community contributions to support all Belgian regions! If you live in Flanders or Wallonia:
-1. Open an issue on GitHub
-2. Share your ENGIE contract pages (21-22 for electricity, 25-26 for gas)
-3. We'll add verified defaults for your region!
-
-**Note:** Variable ENGIE prices are the same across all regions (supplier-level), but fixed costs (distribution, transmission, some taxes) may vary by grid operator.  
+1. [hass-engie-be](https://github.com/myTselection/hass-engie-be) — provides real-time variable ENGIE prices
+2. A P1 meter integration — provides electricity consumption sensors
+3. *(Optional)* Solar panels with a grid export sensor
 
 ## Installation
 
 ### Via HACS (Recommended)
 
-1. Open HACS in Home Assistant
-2. Go to "Integrations"
-3. Click the 3 dots in the top right → "Custom repositories"
-4. Add repository: `https://github.com/ddebaets/belgium-energy-costs`
-5. Category: Integration
-6. Click "Add"
-7. Search for "Belgium Energy Costs"
-8. Click "Download"
-9. Restart Home Assistant
-10. Go to Settings → Devices & Services → Add Integration
-11. Search "Belgium Energy Costs"
-12. Follow the 8-step configuration wizard
+1. Open HACS → Integrations
+2. Click ⋮ → Custom repositories
+3. Add `https://github.com/ddebaets/belgium-energy-costs` — Category: Integration
+4. Search **Belgium Energy Costs** → Download
+5. Restart Home Assistant
+6. Settings → Devices & Services → Add Integration → **Belgium Energy Costs**
 
-### Manual Installation
+### Manual
 
-1. Download the latest release from [GitHub Releases](https://github.com/ddebaets/belgium-energy-costs/releases)
-2. Extract the `belgium_energy_costs` folder to your `/config/custom_components/` directory
-3. Restart Home Assistant
-4. Go to Settings → Devices & Services → Add Integration
-5. Search "Belgium Energy Costs"
-6. Follow the 8-step configuration wizard
+1. Copy `custom_components/belgium_energy_costs/` to your HA `/config/custom_components/` directory
+2. Restart Home Assistant
+3. Settings → Devices & Services → Add Integration → **Belgium Energy Costs**
 
-## Prerequisites
+## Setup Wizard (8 steps)
 
-**Required:**
-1. [hass-engie-be](https://github.com/myTselection/hass-engie-be) integration installed and configured
-2. P1 meter integration providing consumption sensors
+| Step | What you configure |
+|------|--------------------|
+| 1 | Region (Brussels / Flanders / Wallonia) |
+| 2 | Contract start dates — electricity and gas separately |
+| 3 | Electricity meter type (bi-horaire or single tariff) |
+| 4 | P1 meter sensors + baseline readings at contract start |
+| 5 | Solar export sensor (optional) |
+| 6 | Electricity fixed costs (from ENGIE contract pages 21–22) |
+| 7 | Gas meter readings (baseline at contract start + today's reading) + conversion factor |
+| 8 | Gas fixed costs (from ENGIE contract pages 25–26) |
 
-**Optional:**
-3. Solar panels with export tracking
+All cost values can be updated later via **Settings → Devices & Services → Belgium Energy Costs → Configure** — no restart required.
 
 ## Sensors Created
 
-### Always Created:
-- `sensor.months_since_contract_start` - Dynamic contract duration
+### Always created
+| Sensor | Unit | Description |
+|--------|------|-------------|
+| Months Since Contract Start | — | Dynamic contract duration |
 
-### Electricity (Bi-horaire):
-- `sensor.total_electricity_cost_peak` - EUR/kWh (variable + fixed)
-- `sensor.total_electricity_cost_off_peak` - EUR/kWh (variable + fixed)
-- `sensor.electricity_peak_vs_off_peak_savings` - Savings potential
-- `sensor.electricity_peak_consumption_since_contract_start` - kWh
-- `sensor.electricity_off_peak_consumption_since_contract_start` - kWh
-- `sensor.electricity_total_cost_since_contract_start` - EUR
-- `sensor.electricity_estimated_annual_cost` - EUR/year
-- `sensor.electricity_average_monthly_consumption` - kWh/month
-- `sensor.electricity_average_monthly_cost` - EUR/month
+### Electricity — bi-horaire
+| Sensor | Unit | Description |
+|--------|------|-------------|
+| Total Electricity Cost Peak | €/kWh | ENGIE variable + all fixed components (day tariff) |
+| Total Electricity Cost Off-Peak | €/kWh | ENGIE variable + all fixed components (night/weekend tariff) |
+| Electricity Peak vs Off-Peak Savings | €/kWh | Price difference between tariffs |
+| Electricity Peak Consumption Since Contract Start | kWh | — |
+| Electricity Off-Peak Consumption Since Contract Start | kWh | — |
+| Electricity Total Cost Since Contract Start | € | Energy + fixed monthly costs |
+| Electricity Estimated Annual Cost | € | Extrapolated from actual consumption |
+| Electricity Average Monthly Consumption | kWh | — |
+| Electricity Average Monthly Cost | € | — |
 
-### Electricity (Single Tariff):
-- `sensor.total_electricity_cost` - EUR/kWh (variable + fixed)
-- `sensor.electricity_consumption_since_contract_start` - kWh
-- `sensor.electricity_total_cost_since_contract_start` - EUR
-- `sensor.electricity_estimated_annual_cost` - EUR/year
-- `sensor.electricity_average_monthly_consumption` - kWh/month
-- `sensor.electricity_average_monthly_cost` - EUR/month
+### Electricity — single tariff
+| Sensor | Unit | Description |
+|--------|------|-------------|
+| Total Electricity Cost | €/kWh | ENGIE variable + all fixed components |
+| Electricity Consumption Since Contract Start | kWh | — |
+| Electricity Total Cost Since Contract Start | € | — |
+| Electricity Estimated Annual Cost | € | — |
+| Electricity Average Monthly Consumption | kWh | — |
+| Electricity Average Monthly Cost | € | — |
 
-### Solar Export (if enabled):
-- `sensor.total_electricity_injection_price` - EUR/kWh
-- `sensor.electricity_total_export_since_contract_start` - kWh injected
-- `sensor.electricity_injection_revenue_since_contract_start` - EUR earned
-- `sensor.electricity_net_cost_since_contract_start` - EUR (consumption - revenue)
-- `sensor.electricity_estimated_annual_injection_revenue` - EUR/year
+### Solar export (if enabled)
+| Sensor | Unit | Description |
+|--------|------|-------------|
+| Total Electricity Injection Price | €/kWh | What ENGIE pays per injected kWh |
+| Electricity Total Export Since Contract Start | kWh | — |
+| Electricity Injection Revenue Since Contract Start | € | — |
+| Electricity Net Cost Since Contract Start | € | Consumption cost minus injection revenue |
+| Electricity Estimated Annual Injection Revenue | € | — |
 
-### Gas (if enabled):
-- `sensor.total_gas_cost` - EUR/kWh (variable + fixed)
-- `sensor.gas_consumption_since_contract_start` - m³
-- `sensor.gas_consumption_since_contract_start_kwh` - kWh
-- `sensor.gas_total_cost_since_contract_start` - EUR
-- `sensor.gas_estimated_annual_cost` - EUR/year
-- `sensor.gas_average_monthly_consumption` - kWh/month
-- `sensor.gas_average_monthly_cost` - EUR/month
-- `number.belgium_energy_costs_gas_meter_reading` - Manual gas meter (m³)
+### Gas (if enabled)
+| Sensor | Unit | Description |
+|--------|------|-------------|
+| Total Gas Cost | €/kWh | ENGIE variable + all fixed per-kWh components |
+| Gas Consumption Since Contract Start | m³ | — |
+| Gas Consumption Since Contract Start (kWh) | kWh | Using your conversion factor |
+| Gas Total Cost Since Contract Start | € | Energy + fixed monthly costs |
+| Gas Estimated Annual Cost | € | Extrapolated from actual consumption |
+| Gas Average Monthly Consumption | kWh | — |
+| Gas Average Monthly Cost | € | — |
 
-### Combined:
-- `sensor.total_energy_cost_since_contract_start` - EUR (electricity + gas)
-- `sensor.total_estimated_annual_energy_cost` - EUR/year
-- `sensor.total_average_monthly_energy_cost` - EUR/month
+### Combined
+| Sensor | Unit | Description |
+|--------|------|-------------|
+| Total Energy Cost Since Contract Start | € | Electricity + gas |
+| Total Estimated Annual Energy Cost | € | Electricity + gas annualised |
+| Total Average Monthly Energy Cost | € | — |
 
-## Manual Gas Meter Updates
+### Number entity
+| Entity | Unit | Description |
+|--------|------|-------------|
+| Gas Meter Reading | m³ | Manual gas meter — update monthly |
 
-Since most Belgian homes don't have digital gas meters on the P1 port, you'll need to update your gas reading manually each month (recommended: 1st of each month).
+## Updating Gas Meter Reading
 
-**Three methods to update:**
+Belgian gas meters are typically not connected to the P1 port, so you update the reading manually (recommended: 1st of each month).
 
-### Method 1: Via Options Flow (Easiest)
-1. Settings → Devices & Services
-2. Belgium Energy Costs → Configure
-3. "Update Gas Meter Reading"
-4. Enter current reading (e.g., 13500)
-5. Submit ✅
+**Via options flow** (easiest):
+Settings → Devices & Services → Belgium Energy Costs → Configure → 🔢 Update Gas Meter Reading
 
-### Method 2: Via Service Call (For Automations)
+**Via service call** (for automations):
 ```yaml
 service: belgium_energy_costs.update_gas_reading
 data:
-  reading: 13500
+  reading: 13500.5
 ```
 
-### Method 3: Via Number Entity
-1. Developer Tools → States
-2. Find: `number.belgium_energy_costs_gas_meter_reading`
-3. Set value manually
+## Updating Annual Costs
 
-## Annual Cost Update
+When your new ENGIE contract arrives (typically each June):
 
-When your new energy contract arrives (typically June):
+Settings → Devices & Services → Belgium Energy Costs → Configure → ⚡ Update Electricity Costs *or* 🔥 Update Gas Costs
 
-### Via Options Flow (Recommended - No Restart Required!)
-1. Settings → Devices & Services
-2. Belgium Energy Costs → Configure
-3. "Update Electricity Costs" or "Update Gas Costs"
-4. Enter new values from contract (pages 21-22 for electricity, 25-26 for gas)
-5. Submit ✅
-6. Sensors update immediately!
+Sensors update immediately — no restart required.
 
-## Energy Dashboard Integration
+## Example Dashboard Card (Energy tab)
 
-All sensors are compatible with Home Assistant's Energy Dashboard:
+```yaml
+- type: entities
+  title: ⚡ Electricity
+  entities:
+    - entity: sensor.total_electricity_cost_peak
+      name: "Current Rate – Peak"
+    - entity: sensor.total_electricity_cost_off_peak
+      name: "Current Rate – Off-Peak"
+    - entity: sensor.electricity_total_cost_since_contract_start
+      name: "Total Cost"
+    - entity: sensor.electricity_estimated_annual_cost
+      name: "Estimated Annual Cost"
 
-**Electricity:**
-- Consumption: Use P1 meter sensors (peak/offpeak or total)
-- Cost per kWh: Use `sensor.total_electricity_cost_peak` / `sensor.total_electricity_cost_off_peak`
+- type: entities
+  title: 🔥 Gas
+  entities:
+    - entity: sensor.total_gas_cost
+      name: "Current Rate"
+    - entity: sensor.gas_total_cost_since_contract_start
+      name: "Total Cost"
+    - entity: sensor.gas_estimated_annual_cost
+      name: "Estimated Annual Cost"
 
-**Gas:**
-- Consumption: Use `sensor.gas_consumption_since_contract_start_kwh`
-- Cost per kWh: Use `sensor.total_gas_cost`
-- Cost tracking: Use `sensor.gas_total_cost_since_contract_start`
+- type: entities
+  title: 💰 Combined
+  entities:
+    - entity: sensor.total_energy_cost_since_contract_start
+      name: "Total Energy Bill"
+    - entity: sensor.total_estimated_annual_energy_cost
+      name: "Estimated Annual Total"
+```
+
+## Architecture Notes
+
+- **Event-driven**: sensors subscribe to P1 meter and ENGIE price changes via `async_track_state_change_event` — no polling
+- **Debounced**: a shared `_UpdateThrottle` per config entry deduplicates subscriptions and batches state writes (5 s window) to reduce event-loop pressure from high-frequency P1 updates
+- **Direct object references**: derived sensors hold Python references to their dependencies and call `.native_value` directly — no `hass.states.get()` round-trips on sibling sensors
+- **Entry-scoped unique IDs**: all entity unique IDs include the config entry ID, so multiple installations never collide
 
 ## Dependencies
 
-- [hass-engie-be](https://github.com/myTselection/hass-engie-be) - Fetches variable ENGIE Belgium prices
+- [hass-engie-be](https://github.com/myTselection/hass-engie-be) by @myTselection
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — especially if you're in Flanders or Wallonia and want to help verify regional cost structures.
 
 ## Support
 
@@ -187,9 +202,4 @@ All sensors are compatible with Home Assistant's Energy Dashboard:
 
 ## License
 
-MIT License - See LICENSE file
-
-## Credits
-
-- Variable price data provided by [hass-engie-be](https://github.com/myTselection/hass-engie-be) by @myTselection
-- Developed for the Belgian energy market (SIBELGA, Fluvius, ORES)
+MIT License — see [LICENSE](LICENSE)

@@ -1,5 +1,7 @@
 {
-  "codeowners": ["@ddebaets"],
+  "codeowners": [
+    "@ddebaets"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/ddebaets/belgium-energy-costs",
@@ -8,5 +10,5 @@
   "issue_tracker": "https://github.com/ddebaets/belgium-energy-costs/issues",
   "name": "Belgium Energy Costs",
   "requirements": [],
-  "version": "5.2.0"
+  "version": "5.4.0"
 }

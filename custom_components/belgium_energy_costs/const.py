@@ -77,16 +77,13 @@ COST_GAS_FIXED_MONTHLY = "fixed_monthly"
 DEFAULT_GAS_CONVERSION = 11.2  # kWh/m³ for Brussels/SIBELGA
 DEFAULT_DAYS_PER_MONTH = 30.44
 
-# Gas meter number entity (auto-created by integration)
-GAS_METER_ENTITY_ID = f"number.{DOMAIN}_gas_meter_reading"
-
 # ENGIE Belgium integration sensor names
 ENGIE_SENSOR_ELEC_PEAK = "sensor.engie_belgium_electricity_peak_offtake_price"
 ENGIE_SENSOR_ELEC_OFFPEAK = "sensor.engie_belgium_electricity_off_peak_offtake_price"
 ENGIE_SENSOR_ELEC_INJECTION = "sensor.engie_belgium_electricity_injection_price"
 ENGIE_SENSOR_GAS = "sensor.engie_belgium_gas_offtake_price"
 
-# Sensor unique IDs
+# Sensor unique ID suffixes
 SENSOR_MONTHS_SINCE_START = "months_since_contract_start"
 SENSOR_TOTAL_ELEC_PEAK = "total_electricity_cost_peak"
 SENSOR_TOTAL_ELEC_OFFPEAK = "total_electricity_cost_off_peak"
@@ -110,3 +107,13 @@ SENSOR_GAS_TOTAL_COST = "gas_total_cost_since_contract_start"
 SENSOR_GAS_ANNUAL_COST = "gas_estimated_annual_cost"
 SENSOR_TOTAL_ENERGY_COST = "total_energy_cost_since_contract_start"
 SENSOR_TOTAL_ANNUAL_COST = "total_estimated_annual_energy_cost"
+
+
+def get_gas_meter_entity_id(entry_id: str) -> str:
+    """Return the gas meter number entity_id scoped to a config entry.
+
+    The entry_id (a ULID) is lowercased so the resulting entity_id only
+    contains valid characters (a-z, 0-9, underscore). ULIDs are
+    case-insensitive so this is safe.
+    """
+    return f"number.{DOMAIN}_{entry_id.lower()}_gas_meter_reading"

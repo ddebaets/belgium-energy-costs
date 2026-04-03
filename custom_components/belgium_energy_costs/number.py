@@ -1,4 +1,4 @@
-"""Number platform for Belgium Energy Costs - Gas Meter Reading."""
+"""Number platform for Belgium Energy Costs – Gas Meter Reading."""
 from __future__ import annotations
 
 import logging
@@ -16,6 +16,7 @@ from .const import (
     CONF_GAS,
     CONF_ENABLED,
     CONF_BASELINE_READING_M3,
+    get_gas_meter_entity_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,42 +27,63 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up gas meter number entity from config entry."""
-    # Only create if gas is enabled
+    """Set up the gas meter number entity from a config entry."""
     if not entry.data.get(CONF_GAS, {}).get(CONF_ENABLED, False):
         return
-    
-    # Use current reading if available, otherwise baseline
+
     gas_config = entry.data[CONF_GAS]
-    baseline = gas_config.get(CONF_BASELINE_READING_M3, 0)
+    baseline = gas_config.get(CONF_BASELINE_READING_M3, 0.0)
     current_reading = gas_config.get("current_reading_m3", baseline)
-    
-    async_add_entities([GasMeterReadingNumber(entry.entry_id, current_reading)], True)
-    _LOGGER.info("Created gas meter reading number entity with initial value: %s m³", current_reading)
+
+    async_add_entities(
+        [GasMeterReadingNumber(entry.entry_id, current_reading, baseline)],
+        update_before_add=True,
+    )
+    _LOGGER.info(
+        "Gas meter reading entity created (entry %s, initial value %.3f m³)",
+        entry.entry_id,
+        current_reading,
+    )
 
 
 class GasMeterReadingNumber(NumberEntity, RestoreEntity):
-    """Number entity for gas meter reading in m³."""
+    """Editable number entity representing the physical gas meter in m³.
 
-    _attr_has_entity_name = True
-    _attr_name = "Gas Meter Reading"
+    The entity_id is set explicitly to match what get_gas_meter_entity_id()
+    returns, so gas sensors can always find it regardless of how HA would
+    otherwise derive the entity_id from the device/entity name.
+    """
+
+    # Do NOT use _attr_has_entity_name = True — that makes HA derive the
+    # entity_id from device name + entity name, which we can't control.
+    # Instead we set a fully explicit entity_id below.
+    _attr_has_entity_name = False
     _attr_icon = "mdi:meter-gas"
-    _attr_native_min_value = 0
-    _attr_native_max_value = 999999
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = 999_999.0
     _attr_native_step = 0.001
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
     _attr_mode = NumberMode.BOX
 
-    def __init__(self, entry_id: str, baseline: float) -> None:
-        """Initialize the gas meter reading number."""
+    def __init__(self, entry_id: str, initial_value: float, baseline: float) -> None:
+        """Initialise the gas meter reading entity."""
         self._entry_id = entry_id
-        self._attr_unique_id = f"{DOMAIN}_{entry_id}_gas_meter_reading"
-        self._attr_native_value = baseline
         self._baseline = baseline
+        self._attr_native_value = initial_value
+
+        # Scoped unique_id prevents collisions between multiple entries.
+        self._attr_unique_id = f"{DOMAIN}_{entry_id}_gas_meter_reading"
+
+        # Explicit friendly name shown in the UI.
+        self._attr_name = "Gas Meter Reading"
+
+        # Force the entity_id to exactly what get_gas_meter_entity_id() returns
+        # so gas sensors can reliably look it up via hass.states.get().
+        self.entity_id = get_gas_meter_entity_id(entry_id)
 
     @property
-    def device_info(self):
-        """Return device info."""
+    def device_info(self) -> dict[str, Any]:
+        """Group under the integration's virtual device."""
         return {
             "identifiers": {(DOMAIN, self._entry_id)},
             "name": "Belgium Energy Costs",
@@ -70,32 +92,42 @@ class GasMeterReadingNumber(NumberEntity, RestoreEntity):
         }
 
     async def async_added_to_hass(self) -> None:
-        """Restore last state when added to hass."""
+        """Restore the last known meter reading after a restart."""
         await super().async_added_to_hass()
-        
-        # Restore previous value if available
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state not in (None, "unknown", "unavailable"):
-                try:
-                    self._attr_native_value = float(last_state.state)
-                    _LOGGER.debug(
-                        "Restored gas meter reading: %s m³", 
-                        self._attr_native_value
-                    )
-                except (ValueError, TypeError):
-                    _LOGGER.warning(
-                        "Could not restore gas meter reading, using baseline: %s m³",
-                        self._baseline
-                    )
-                    self._attr_native_value = self._baseline
-        else:
+
+        last_state = await self.async_get_last_state()
+        if last_state is None or last_state.state in (None, "unknown", "unavailable"):
             _LOGGER.info(
-                "No previous gas meter reading found, using baseline: %s m³",
-                self._baseline
+                "No previous gas meter state for entry %s; using initial value %.3f m³",
+                self._entry_id,
+                self._attr_native_value,
             )
+        else:
+            try:
+                self._attr_native_value = float(last_state.state)
+                _LOGGER.debug(
+                    "Restored gas meter reading for entry %s: %.3f m³",
+                    self._entry_id,
+                    self._attr_native_value,
+                )
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Could not restore gas meter reading for entry %s "
+                    "(state=%r); keeping initial value %.3f m³",
+                    self._entry_id,
+                    last_state.state,
+                    self._attr_native_value,
+                )
+
+        # Write state immediately so gas sensors never read 'unknown'.
+        self.async_write_ha_state()
 
     async def async_set_native_value(self, value: float) -> None:
-        """Update the current value."""
+        """Handle a value change from the UI or a service call."""
         self._attr_native_value = value
         self.async_write_ha_state()
-        _LOGGER.info("Gas meter reading updated to: %s m³", value)
+        _LOGGER.info(
+            "Gas meter reading updated to %.3f m³ (entry %s)",
+            value,
+            self._entry_id,
+        )

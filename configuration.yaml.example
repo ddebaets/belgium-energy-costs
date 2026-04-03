@@ -1,0 +1,113 @@
+# Belgium Energy Costs - Example Configuration
+# Copy this to your configuration.yaml and adjust values
+# NOTE: This is for YAML configuration. The integration also supports
+# UI-based setup via Settings → Add Integration (recommended!)
+
+belgium_energy_costs:
+  # Region selection (determines defaults for gas conversion, grid operator)
+  # Options: brussels, flanders, wallonia
+  # Note: Only Brussels is fully supported. Other regions coming soon!
+  region: brussels
+  
+  # Contract start date (when you started this energy contract)
+  contract_start_date: "2025-06-03"
+  
+  # ===========================================================================
+  # ELECTRICITY CONFIGURATION
+  # ===========================================================================
+  electricity:
+    # Meter type: "bi_horaire" for day/night tariff, "single" for single tariff
+    meter_type: bi_horaire
+    
+    # Consumption (import) tracking
+    import:
+      # Your P1 meter sensors
+      p1_sensors:
+        # For bi_horaire:
+        peak: sensor.p1_meter_energy_import_tariff_1
+        offpeak: sensor.p1_meter_energy_import_tariff_2
+        # For single tariff, use:
+        # total: sensor.p1_meter_energy_import_total
+      
+      # Your meter readings at contract start date
+      baseline_readings:
+        # For bi_horaire:
+        peak: 7471
+        offpeak: 9331
+        # For single tariff, use:
+        # total: 15420
+    
+    # Solar production (export) - OPTIONAL - Remove if you don't have solar
+    export:
+      enabled: true
+      p1_sensors:
+        # Most common: single export meter
+        total: sensor.p1_meter_energy_export_total
+        # OR for bi-horaire export tracking (rare):
+        # peak: sensor.p1_meter_energy_export_tariff_1
+        # offpeak: sensor.p1_meter_energy_export_tariff_2
+      baseline_readings:
+        total: 1250
+        # OR for bi-horaire:
+        # peak: 800
+        # offpeak: 450
+    
+    # Fixed costs from your ENGIE contract (Pages 21-22)
+    # Update these values annually when you receive new contract
+    costs:
+      green_certificates: 0.0275      # Certificats verts (EUR/kWh)
+      
+      # For bi_horaire, use:
+      distribution_peak: 0.0941       # Distribution heures pleines (EUR/kWh)
+      distribution_offpeak: 0.0706    # Distribution heures creuses (EUR/kWh)
+      # For single tariff, use:
+      # distribution: 0.0823          # Distribution (EUR/kWh)
+      
+      transmission: 0.0225            # Transport (EUR/kWh)
+      cotisation: 0.00204             # Cotisation fédérale (EUR/kWh)
+      accise_federale: 0.05033        # Accise fédérale (EUR/kWh)
+      fixed_monthly: 14.05            # Monthly fixed costs (EUR/month)
+                                      # Includes: ENGIE monthly + SIBELGA 
+                                      # (distribution + meter + capacity) + OSP
+  
+  # ===========================================================================
+  # GAS CONFIGURATION - OPTIONAL - Set enabled: false if you don't have gas
+  # ===========================================================================
+  gas:
+    enabled: true
+    
+    # Your gas meter reading at contract start (in m³)
+    baseline_reading_m3: 12096
+    
+    # Gas conversion factor (kWh per m³)
+    # Brussels/SIBELGA: 11.2
+    # Flanders/Fluvius: 10.8-11.5 (check your bill)
+    # Wallonia/ORES: 10.8-11.5 (check your bill)
+    conversion_factor: 11.2
+    
+    # Fixed costs from your ENGIE contract (Pages 25-26)
+    # Update these values annually when you receive new contract
+    costs:
+      distribution: 0.01949           # Distribution (EUR/kWh)
+      transmission: 0.00165           # Transport (EUR/kWh)
+      cotisation: 0.00106             # Cotisation fédérale (EUR/kWh)
+      accise_federale: 0.00872        # Accise fédérale (EUR/kWh)
+      fixed_monthly: 7.57             # Monthly fixed costs (EUR/month)
+                                      # Includes: ENGIE monthly + SIBELGA 
+                                      # (distribution + meter) + OSP
+
+# ===========================================================================
+# GAS METER INPUT HELPER - Required if gas is enabled
+# ===========================================================================
+# You need to create an input_number helper for manual gas meter readings
+# Settings -> Devices & Services -> Helpers -> Create Helper -> Number
+# 
+# Name: gas_meter_reading_m3
+# Min: 0
+# Max: 99999
+# Step: 0.001
+# Unit: m³
+# Mode: Box
+#
+# Update this helper on the 1st of each month with your gas meter reading
+# ===========================================================================

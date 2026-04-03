@@ -1,47 +1,21 @@
 """Belgium Energy Costs integration."""
 import logging
-from datetime import datetime
+
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     DOMAIN,
-    CONF_CONTRACT_START_DATE,
     CONF_ELECTRICITY,
     CONF_GAS,
-    CONF_METER_TYPE,
-    CONF_IMPORT,
-    CONF_EXPORT,
     CONF_ENABLED,
-    CONF_P1_SENSORS,
-    CONF_BASELINE_READINGS,
-    CONF_COSTS,
-    CONF_CONVERSION_FACTOR,
-    CONF_BASELINE_READING_M3,
-    METER_TYPE_SINGLE,
+    CONF_METER_TYPE,
     METER_TYPE_BI_HORAIRE,
-    SENSOR_TOTAL,
-    SENSOR_PEAK,
-    SENSOR_OFFPEAK,
-    DEFAULT_GAS_CONVERSION,
-    COST_GREEN_CERT,
-    COST_DIST_PEAK,
-    COST_DIST_OFFPEAK,
-    COST_DIST_SINGLE,
-    COST_TRANSMISSION,
-    COST_COTISATION,
-    COST_ACCISE,
-    COST_FIXED_MONTHLY,
-    COST_GAS_DISTRIBUTION,
-    COST_GAS_TRANSMISSION,
-    COST_GAS_COTISATION,
-    COST_GAS_ACCISE,
-    COST_GAS_FIXED_MONTHLY,
     ENGIE_SENSOR_ELEC_PEAK,
     ENGIE_SENSOR_ELEC_OFFPEAK,
     ENGIE_SENSOR_GAS,
@@ -51,227 +25,173 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER]
 
-# Validation schemas
-ELECTRICITY_COSTS_BI_HORAIRE_SCHEMA = vol.Schema({
-    vol.Required(COST_GREEN_CERT): cv.positive_float,
-    vol.Required(COST_DIST_PEAK): cv.positive_float,
-    vol.Required(COST_DIST_OFFPEAK): cv.positive_float,
-    vol.Required(COST_TRANSMISSION): cv.positive_float,
-    vol.Required(COST_COTISATION): cv.positive_float,
-    vol.Required(COST_ACCISE): cv.positive_float,
-    vol.Required(COST_FIXED_MONTHLY): cv.positive_float,
-})
+# Bump this when the config-entry schema or entity unique-ID format changes.
+# HA will call async_migrate_entry for entries stored at a lower version.
+CONFIG_ENTRY_VERSION = 2
 
-ELECTRICITY_COSTS_SINGLE_SCHEMA = vol.Schema({
-    vol.Required(COST_GREEN_CERT): cv.positive_float,
-    vol.Required(COST_DIST_SINGLE): cv.positive_float,
-    vol.Required(COST_TRANSMISSION): cv.positive_float,
-    vol.Required(COST_COTISATION): cv.positive_float,
-    vol.Required(COST_ACCISE): cv.positive_float,
-    vol.Required(COST_FIXED_MONTHLY): cv.positive_float,
-})
-
-GAS_COSTS_SCHEMA = vol.Schema({
-    vol.Required(COST_GAS_DISTRIBUTION): cv.positive_float,
-    vol.Required(COST_GAS_TRANSMISSION): cv.positive_float,
-    vol.Required(COST_GAS_COTISATION): cv.positive_float,
-    vol.Required(COST_GAS_ACCISE): cv.positive_float,
-    vol.Required(COST_GAS_FIXED_MONTHLY): cv.positive_float,
-})
-
-P1_SENSORS_SINGLE_SCHEMA = vol.Schema({
-    vol.Required(SENSOR_TOTAL): cv.entity_id,
-})
-
-P1_SENSORS_BI_HORAIRE_SCHEMA = vol.Schema({
-    vol.Required(SENSOR_PEAK): cv.entity_id,
-    vol.Required(SENSOR_OFFPEAK): cv.entity_id,
-})
-
-BASELINE_READINGS_SINGLE_SCHEMA = vol.Schema({
-    vol.Required(SENSOR_TOTAL): cv.positive_float,
-})
-
-BASELINE_READINGS_BI_HORAIRE_SCHEMA = vol.Schema({
-    vol.Required(SENSOR_PEAK): cv.positive_float,
-    vol.Required(SENSOR_OFFPEAK): cv.positive_float,
-})
-
-IMPORT_EXPORT_SCHEMA = vol.Schema({
-    vol.Required(CONF_P1_SENSORS): vol.Any(
-        P1_SENSORS_SINGLE_SCHEMA,
-        P1_SENSORS_BI_HORAIRE_SCHEMA,
-    ),
-    vol.Required(CONF_BASELINE_READINGS): vol.Any(
-        BASELINE_READINGS_SINGLE_SCHEMA,
-        BASELINE_READINGS_BI_HORAIRE_SCHEMA,
-    ),
-})
-
-EXPORT_SCHEMA = vol.Schema({
-    vol.Required(CONF_ENABLED, default=False): cv.boolean,
-    vol.Optional(CONF_P1_SENSORS): vol.Any(
-        P1_SENSORS_SINGLE_SCHEMA,
-        P1_SENSORS_BI_HORAIRE_SCHEMA,
-    ),
-    vol.Optional(CONF_BASELINE_READINGS): vol.Any(
-        BASELINE_READINGS_SINGLE_SCHEMA,
-        BASELINE_READINGS_BI_HORAIRE_SCHEMA,
-    ),
-})
-
-ELECTRICITY_SCHEMA = vol.Schema({
-    vol.Required(CONF_METER_TYPE): vol.In([METER_TYPE_SINGLE, METER_TYPE_BI_HORAIRE]),
-    vol.Required(CONF_IMPORT): IMPORT_EXPORT_SCHEMA,
-    vol.Optional(CONF_EXPORT, default={CONF_ENABLED: False}): EXPORT_SCHEMA,
-    vol.Required(CONF_COSTS): vol.Any(
-        ELECTRICITY_COSTS_SINGLE_SCHEMA,
-        ELECTRICITY_COSTS_BI_HORAIRE_SCHEMA,
-    ),
-})
-
-GAS_SCHEMA = vol.Schema({
-    vol.Required(CONF_ENABLED, default=False): cv.boolean,
-    vol.Optional(CONF_BASELINE_READING_M3): cv.positive_float,
-    vol.Optional(CONF_CONVERSION_FACTOR, default=DEFAULT_GAS_CONVERSION): cv.positive_float,
-    vol.Optional(CONF_COSTS): GAS_COSTS_SCHEMA,
-})
-
+# Reject YAML-only setup gracefully.
 CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema({
-            vol.Required(CONF_CONTRACT_START_DATE): cv.date,
-            vol.Required(CONF_ELECTRICITY): ELECTRICITY_SCHEMA,
-            vol.Optional(CONF_GAS, default={CONF_ENABLED: False}): GAS_SCHEMA,
-        })
-    },
+    {DOMAIN: vol.Schema({}, extra=vol.ALLOW_EXTRA)},
     extra=vol.ALLOW_EXTRA,
 )
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Belgium Energy Costs integration."""
-    if DOMAIN not in config:
-        return True
-
-    conf = config[DOMAIN]
-    
-    # Validate ENGIE integration is available
-    await _validate_engie_integration(hass, conf)
-    
-    # Store config in hass.data
-    hass.data[DOMAIN] = conf
-    
-    # Forward setup to sensor platform
-    await hass.helpers.discovery.async_load_platform(
-        Platform.SENSOR, DOMAIN, conf, config
-    )
-    
-    _LOGGER.info("Belgium Energy Costs integration initialized")
+    """Reject YAML setup and guide users to the UI config flow."""
+    if DOMAIN in config:
+        _LOGGER.error(
+            "Belgium Energy Costs: YAML configuration is no longer supported. "
+            "Please set up the integration via Settings → Devices & Services → "
+            "Add Integration → Belgium Energy Costs."
+        )
     return True
 
 
-async def _validate_engie_integration(hass: HomeAssistant, config: dict) -> None:
-    """Validate that required ENGIE Belgium sensors exist."""
-    missing_sensors = []
-    
-    # Check electricity sensors based on meter type
-    meter_type = config[CONF_ELECTRICITY][CONF_METER_TYPE]
-    
-    if meter_type == METER_TYPE_BI_HORAIRE:
-        if not hass.states.get(ENGIE_SENSOR_ELEC_PEAK):
-            missing_sensors.append(ENGIE_SENSOR_ELEC_PEAK)
-        if not hass.states.get(ENGIE_SENSOR_ELEC_OFFPEAK):
-            missing_sensors.append(ENGIE_SENSOR_ELEC_OFFPEAK)
-    else:
-        # For single tariff, we still need at least one price sensor
-        if not hass.states.get(ENGIE_SENSOR_ELEC_PEAK):
-            missing_sensors.append(ENGIE_SENSOR_ELEC_PEAK)
-    
-    # Check gas sensor if gas is enabled
-    if config.get(CONF_GAS, {}).get(CONF_ENABLED, False):
-        if not hass.states.get(ENGIE_SENSOR_GAS):
-            missing_sensors.append(ENGIE_SENSOR_GAS)
-    
-    if missing_sensors:
-        _LOGGER.warning(
-            "Belgium Energy Costs: ENGIE Belgium integration sensors not found: %s. "
-            "Please ensure hass-engie-be integration is installed and configured. "
-            "Some cost calculations may not work correctly.",
-            ", ".join(missing_sensors)
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config-entry versions to the current schema.
+
+    Version 1 → 2
+    --------------
+    Sensor unique IDs changed from ``belgium_energy_costs_{suffix}`` to
+    ``belgium_energy_costs_{entry_id}_{suffix}`` so that multiple config
+    entries never collide.  We rewrite the entity registry in-place so
+    existing entity IDs (and therefore all dashboard cards) are preserved.
+    """
+    _LOGGER.info(
+        "Migrating Belgium Energy Costs entry from version %s to %s",
+        entry.version,
+        CONFIG_ENTRY_VERSION,
+    )
+
+    if entry.version == 1:
+        ent_reg = er.async_get(hass)
+        entry_id = entry.entry_id
+
+        # All suffixes used by v1 sensors (unique_id = f"{DOMAIN}_{suffix}")
+        old_suffixes = [
+            "months_since_contract_start",
+            "total_electricity_cost_peak",
+            "total_electricity_cost_off_peak",
+            "total_electricity_cost",
+            "total_electricity_injection_price",
+            "electricity_peak_vs_off_peak_savings",
+            "total_gas_cost",
+            "electricity_peak_consumption_since_contract_start",
+            "electricity_off_peak_consumption_since_contract_start",
+            "electricity_consumption_since_contract_start",
+            "electricity_total_export_since_contract_start",
+            "electricity_injection_revenue_since_contract_start",
+            "electricity_total_cost_since_contract_start",
+            "electricity_net_cost_since_contract_start",
+            "electricity_estimated_annual_cost",
+            "electricity_estimated_annual_injection_revenue",
+            "gas_total_cost_since_contract_start",
+            "gas_estimated_annual_cost",
+            "total_energy_cost_since_contract_start",
+            "total_estimated_annual_energy_cost",
+            "electricity_avg_monthly_consumption",
+            "electricity_avg_monthly_cost",
+            "gas_avg_monthly_consumption",
+            "gas_avg_monthly_cost",
+            "gas_consumption_kwh",
+            "gas_consumption_m3",
+            "total_avg_monthly_cost",
+        ]
+
+        migrated = 0
+        for suffix in old_suffixes:
+            old_uid = f"{DOMAIN}_{suffix}"
+            new_uid = f"{DOMAIN}_{entry_id}_{suffix}"
+            entity = ent_reg.async_get_entity_id("sensor", DOMAIN, old_uid)
+            if entity:
+                ent_reg.async_update_entity(entity, new_unique_id=new_uid)
+                migrated += 1
+
+        # Also migrate the gas number entity
+        old_gas_uid = f"{DOMAIN}_gas_meter_reading"
+        new_gas_uid = f"{DOMAIN}_{entry_id}_gas_meter_reading"
+        gas_entity = ent_reg.async_get_entity_id("number", DOMAIN, old_gas_uid)
+        if gas_entity:
+            ent_reg.async_update_entity(gas_entity, new_unique_id=new_gas_uid)
+            migrated += 1
+
+        _LOGGER.info(
+            "Belgium Energy Costs migration v1→v2: updated %d entity unique IDs",
+            migrated,
         )
+
+        hass.config_entries.async_update_entry(entry, version=CONFIG_ENTRY_VERSION)
+
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Belgium Energy Costs from a config entry."""
-    conf = entry.data
-    
-    # Validate ENGIE integration is available
-    await _validate_engie_integration(hass, conf)
-    
-    # Store config in hass.data
+    await _warn_missing_engie_sensors(hass, entry.data)
+
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = conf
-    
-    # Forward setup to platforms (sensor and number)
-    # Number platform will auto-create gas meter entity if gas is enabled
+    hass.data[DOMAIN][entry.entry_id] = entry.data
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
-    # Register services
-    await _async_register_services(hass)
-    
-    # Listen for options updates
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-    
-    _LOGGER.info("Belgium Energy Costs integration initialized via config entry")
+    await _async_register_services(hass, entry)
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+
+    _LOGGER.info("Belgium Energy Costs loaded (entry %s)", entry.entry_id)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    
+        hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
 
 
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
+async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry when options are updated."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def _warn_missing_engie_sensors(hass: HomeAssistant, config: dict) -> None:
+    """Log warnings for missing ENGIE Belgium sensors (non-blocking)."""
+    missing: list[str] = []
+    meter_type = config.get(CONF_ELECTRICITY, {}).get(CONF_METER_TYPE)
+    if meter_type == METER_TYPE_BI_HORAIRE:
+        for entity_id in (ENGIE_SENSOR_ELEC_PEAK, ENGIE_SENSOR_ELEC_OFFPEAK):
+            if not hass.states.get(entity_id):
+                missing.append(entity_id)
+    else:
+        if not hass.states.get(ENGIE_SENSOR_ELEC_PEAK):
+            missing.append(ENGIE_SENSOR_ELEC_PEAK)
+    if config.get(CONF_GAS, {}).get(CONF_ENABLED, False):
+        if not hass.states.get(ENGIE_SENSOR_GAS):
+            missing.append(ENGIE_SENSOR_GAS)
+    if missing:
+        _LOGGER.warning(
+            "Belgium Energy Costs: ENGIE Belgium sensors not found at startup: %s. "
+            "Sensors will be unavailable until the hass-engie-be integration is ready.",
+            ", ".join(missing),
+        )
 
 
-async def _async_register_services(hass: HomeAssistant) -> None:
-    """Register integration services."""
-    
-    async def async_update_gas_reading(call):
-        """Handle update gas reading service call."""
-        reading = call.data.get("reading")
-        entity_id = f"number.{DOMAIN}_gas_meter_reading"
-        
+async def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register integration-level services (idempotent)."""
+    if hass.services.has_service(DOMAIN, "update_gas_reading"):
+        return
+
+    async def _handle_update_gas_reading(call) -> None:
+        from .const import get_gas_meter_entity_id
+        reading: float = call.data["reading"]
+        entity_id = get_gas_meter_entity_id(entry.entry_id)
         await hass.services.async_call(
-            "number",
-            "set_value",
-            {
-                "entity_id": entity_id,
-                "value": reading,
-            },
+            "number", "set_value",
+            {"entity_id": entity_id, "value": reading},
             blocking=True,
         )
-        
-        _LOGGER.info("Updated gas meter reading to %s m³", reading)
-    
-    # Register service if not already registered
-    if not hass.services.has_service(DOMAIN, "update_gas_reading"):
-        hass.services.async_register(
-            DOMAIN,
-            "update_gas_reading",
-            async_update_gas_reading,
-            schema=vol.Schema({
-                vol.Required("reading"): vol.Coerce(float),
-            }),
-        )
+        _LOGGER.info("Gas meter reading updated to %.3f m³", reading)
 
+    hass.services.async_register(
+        DOMAIN, "update_gas_reading", _handle_update_gas_reading,
+        schema=vol.Schema({vol.Required("reading"): vol.Coerce(float)}),
+    )
