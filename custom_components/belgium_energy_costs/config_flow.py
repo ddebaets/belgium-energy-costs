@@ -64,15 +64,16 @@ from .const import (
     COST_GAS_COTISATION,
     COST_GAS_ACCISE,
     COST_GAS_FIXED_MONTHLY,
-    ENGIE_SENSOR_ELEC_PEAK,
-    ENGIE_SENSOR_ELEC_OFFPEAK,
-    ENGIE_SENSOR_GAS,
+    CONF_ENGIE_ELEC_PEAK,
+    CONF_ENGIE_ELEC_OFFPEAK,
+    CONF_ENGIE_ELEC_INJECTION,
+    CONF_ENGIE_GAS,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # Total number of setup steps — used for "Step X of Y" progress display.
-_TOTAL_STEPS = 8
+_TOTAL_STEPS = 9
 
 
 def _step_note(step: int, description: str) -> str:
@@ -183,7 +184,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Step 3: Electricity meter type."""
         if user_input is not None:
             self.config_data[CONF_METER_TYPE] = user_input[CONF_METER_TYPE]
-            return await self.async_step_electricity_sensors()
+            return await self.async_step_engie_sensors()
 
         return self.async_show_form(
             step_id="electricity_type",
@@ -208,7 +209,78 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     # ------------------------------------------------------------------
-    # Step 4 – Electricity P1 sensors
+    # Step 4 – ENGIE price sensors
+    # ------------------------------------------------------------------
+
+    async def async_step_engie_sensors(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 4: Select ENGIE Belgium price sensors."""
+        errors: dict[str, str] = {}
+        meter_type = self.config_data[CONF_METER_TYPE]
+
+        if user_input is not None:
+            # Validate selected sensors exist
+            for field in [CONF_ENGIE_ELEC_PEAK, CONF_ENGIE_ELEC_OFFPEAK] if meter_type == METER_TYPE_BI_HORAIRE else [CONF_ENGIE_ELEC_PEAK]:
+                if not self.hass.states.get(user_input[field]):
+                    errors[field] = "entity_not_found"
+            if CONF_ENGIE_GAS in user_input and user_input[CONF_ENGIE_GAS]:
+                if not self.hass.states.get(user_input[CONF_ENGIE_GAS]):
+                    errors[CONF_ENGIE_GAS] = "entity_not_found"
+
+            if not errors:
+                self.config_data[CONF_ENGIE_ELEC_PEAK] = user_input[CONF_ENGIE_ELEC_PEAK]
+                self.config_data[CONF_ENGIE_ELEC_OFFPEAK] = user_input.get(CONF_ENGIE_ELEC_OFFPEAK, "")
+                self.config_data[CONF_ENGIE_ELEC_INJECTION] = user_input.get(CONF_ENGIE_ELEC_INJECTION, "")
+                self.config_data[CONF_ENGIE_GAS] = user_input.get(CONF_ENGIE_GAS, "")
+                return await self.async_step_electricity_sensors()
+
+        if meter_type == METER_TYPE_BI_HORAIRE:
+            schema = vol.Schema({
+                vol.Required(CONF_ENGIE_ELEC_PEAK): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Required(CONF_ENGIE_ELEC_OFFPEAK): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_ELEC_INJECTION): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_GAS): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+            })
+        else:
+            schema = vol.Schema({
+                vol.Required(CONF_ENGIE_ELEC_PEAK): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_ELEC_INJECTION): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_GAS): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+            })
+
+        return self.async_show_form(
+            step_id="engie_sensors",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "note": _step_note(
+                    4,
+                    "Select your ENGIE Belgium price sensors.\n"
+                    "These are the sensors provided by the ENGIE Belgium integration "
+                    "containing the variable energy price in EUR/kWh.\n"
+                    "Look for sensors named 'Electricity peak offtake price', "
+                    "'Electricity off-peak offtake price', and 'Gas offtake price'.",
+                ),
+            },
+        )
+
+    # ------------------------------------------------------------------    # ------------------------------------------------------------------
+    # Step 5 – Electricity P1 sensors
     # ------------------------------------------------------------------
 
     async def async_step_electricity_sensors(
@@ -303,7 +375,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "note": _step_note(
-                    5,
+                    10,
                     "Do you have solar panels that inject electricity back to the grid?",
                 ),
             },
@@ -347,7 +419,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             description_placeholders={
                 "note": _step_note(
-                    6,
+                    10,
                     "Enter fixed electricity costs from your ENGIE contract (pages 21–22). "
                     "All values in EUR/kWh except fixed monthly (EUR/month). "
                     "These can be updated later via the integration options.",
@@ -405,7 +477,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "grid_operator": grid_operator,
                 "default_conversion": str(default_conversion),
                 "note": _step_note(
-                    7,
+                    10,
                     f"📋 Baseline: your gas meter reading on your contract start date.\n"
                     f"📍 Current reading: what your physical meter shows TODAY.\n"
                     f"Both values are required — without today's reading no consumption can be calculated.\n"
@@ -437,7 +509,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }),
             description_placeholders={
                 "note": _step_note(
-                    8,
+                    10,
                     "Enter fixed gas costs from your ENGIE contract (pages 25–26). "
                     "All values in EUR/kWh except fixed monthly (EUR/month). "
                     "These can be updated later via the integration options.",
@@ -499,6 +571,11 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_REGION: region,
             CONF_ELECTRICITY: electricity,
             CONF_GAS: gas,
+            # ENGIE price sensor entity IDs (user-specific, selected during setup)
+            CONF_ENGIE_ELEC_PEAK: self.config_data.get(CONF_ENGIE_ELEC_PEAK, ""),
+            CONF_ENGIE_ELEC_OFFPEAK: self.config_data.get(CONF_ENGIE_ELEC_OFFPEAK, ""),
+            CONF_ENGIE_ELEC_INJECTION: self.config_data.get(CONF_ENGIE_ELEC_INJECTION, ""),
+            CONF_ENGIE_GAS: self.config_data.get(CONF_ENGIE_GAS, ""),
         }
 
         region_name = REGIONAL_DEFAULTS[region]["name"]

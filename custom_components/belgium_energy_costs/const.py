@@ -77,11 +77,14 @@ COST_GAS_FIXED_MONTHLY = "fixed_monthly"
 DEFAULT_GAS_CONVERSION = 11.2  # kWh/m³ for Brussels/SIBELGA
 DEFAULT_DAYS_PER_MONTH = 30.44
 
-# ENGIE Belgium integration sensor names
-ENGIE_SENSOR_ELEC_PEAK = "sensor.engie_belgium_electricity_peak_offtake_price"
-ENGIE_SENSOR_ELEC_OFFPEAK = "sensor.engie_belgium_electricity_off_peak_offtake_price"
-ENGIE_SENSOR_ELEC_INJECTION = "sensor.engie_belgium_electricity_injection_price"
-ENGIE_SENSOR_GAS = "sensor.engie_belgium_gas_offtake_price"
+# Config keys for user-selected ENGIE sensor entity IDs
+# These are stored in the config entry and passed to sensors at runtime.
+# The ENGIE integration changed its entity naming scheme in v0.8.2 — entity IDs
+# now include the account ID and EAN number and are therefore user-specific.
+CONF_ENGIE_ELEC_PEAK = "engie_elec_peak_sensor"
+CONF_ENGIE_ELEC_OFFPEAK = "engie_elec_offpeak_sensor"
+CONF_ENGIE_ELEC_INJECTION = "engie_elec_injection_sensor"
+CONF_ENGIE_GAS = "engie_gas_sensor"
 
 # Sensor unique ID suffixes
 SENSOR_MONTHS_SINCE_START = "months_since_contract_start"

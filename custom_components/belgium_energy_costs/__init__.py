@@ -14,11 +14,9 @@ from .const import (
     CONF_ELECTRICITY,
     CONF_GAS,
     CONF_ENABLED,
-    CONF_METER_TYPE,
-    METER_TYPE_BI_HORAIRE,
-    ENGIE_SENSOR_ELEC_PEAK,
-    ENGIE_SENSOR_ELEC_OFFPEAK,
-    ENGIE_SENSOR_GAS,
+    CONF_ENGIE_ELEC_PEAK,
+    CONF_ENGIE_ELEC_OFFPEAK,
+    CONF_ENGIE_GAS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -156,17 +154,14 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def _warn_missing_engie_sensors(hass: HomeAssistant, config: dict) -> None:
     """Log warnings for missing ENGIE Belgium sensors (non-blocking)."""
     missing: list[str] = []
-    meter_type = config.get(CONF_ELECTRICITY, {}).get(CONF_METER_TYPE)
-    if meter_type == METER_TYPE_BI_HORAIRE:
-        for entity_id in (ENGIE_SENSOR_ELEC_PEAK, ENGIE_SENSOR_ELEC_OFFPEAK):
-            if not hass.states.get(entity_id):
-                missing.append(entity_id)
-    else:
-        if not hass.states.get(ENGIE_SENSOR_ELEC_PEAK):
-            missing.append(ENGIE_SENSOR_ELEC_PEAK)
+    for key in (CONF_ENGIE_ELEC_PEAK, CONF_ENGIE_ELEC_OFFPEAK):
+        entity_id = config.get(key, "")
+        if entity_id and not hass.states.get(entity_id):
+            missing.append(entity_id)
     if config.get(CONF_GAS, {}).get(CONF_ENABLED, False):
-        if not hass.states.get(ENGIE_SENSOR_GAS):
-            missing.append(ENGIE_SENSOR_GAS)
+        entity_id = config.get(CONF_ENGIE_GAS, "")
+        if entity_id and not hass.states.get(entity_id):
+            missing.append(entity_id)
     if missing:
         _LOGGER.warning(
             "Belgium Energy Costs: ENGIE Belgium sensors not found at startup: %s. "

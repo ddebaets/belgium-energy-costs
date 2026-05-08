@@ -3,14 +3,14 @@
   "config": {
     "step": {
       "user": {
-        "title": "Step 1 of 8 – Select Your Region",
+        "title": "Step 1 of 9 – Select Your Region",
         "description": "{note}",
         "data": {
           "region": "Region"
         }
       },
       "contract_dates": {
-        "title": "Step 2 of 8 – Contract Start Dates",
+        "title": "Step 2 of 9 – Contract Start Dates",
         "description": "⚡ Electricity: the date your current electricity contract started.\n🔥 Gas: the date your current gas contract started.\nUsing the same supplier for both? The dates are likely identical.\n\n⚠️ Cost calculations for past consumption use current prices as an approximation.",
         "data": {
           "elec_contract_start_date": "Electricity contract start date",
@@ -18,14 +18,24 @@
         }
       },
       "electricity_type": {
-        "title": "Step 3 of 8 – Electricity Meter Type",
+        "title": "Step 3 of 9 – Electricity Meter Type",
         "description": "{note}",
         "data": {
           "meter_type": "Meter type"
         }
       },
+      "engie_sensors": {
+        "title": "Step 4 of 9 – ENGIE Price Sensors",
+        "description": "{note}",
+        "data": {
+          "engie_elec_peak_sensor": "Electricity peak offtake price sensor",
+          "engie_elec_offpeak_sensor": "Electricity off-peak offtake price sensor",
+          "engie_elec_injection_sensor": "Electricity injection price sensor (optional)",
+          "engie_gas_sensor": "Gas offtake price sensor (optional here, required if gas enabled)"
+        }
+      },
       "electricity_sensors": {
-        "title": "Step 4 of 8 – P1 Meter Sensors",
+        "title": "Step 5 of 9 – P1 Meter Sensors",
         "description": "{note}",
         "data": {
           "peak_sensor": "Peak (day) sensor",
@@ -37,7 +47,7 @@
         }
       },
       "solar_export": {
-        "title": "Step 5 of 8 – Solar Panels",
+        "title": "Step 6 of 9 – Solar Panels",
         "description": "{note}",
         "data": {
           "has_solar": "I have solar panels with grid injection",
@@ -46,7 +56,7 @@
         }
       },
       "electricity_costs": {
-        "title": "Step 6 of 8 – Electricity Fixed Costs",
+        "title": "Step 7 of 9 – Electricity Fixed Costs",
         "description": "{note}",
         "data": {
           "green_certificates": "Green certificates (EUR/kWh)",
@@ -60,7 +70,7 @@
         }
       },
       "gas_config": {
-        "title": "Step 7 of 8 – Gas Configuration",
+        "title": "Step 8 of 9 – Gas Configuration",
         "description": "📋 Baseline: your gas meter reading on your contract start date.\n📍 Current reading: what your physical meter shows TODAY.\nBoth values are required — without today's reading no consumption can be calculated.\nDefault conversion factor for {grid_operator}: {default_conversion} kWh/m³",
         "data": {
           "has_gas": "I have a gas connection",
@@ -70,7 +80,7 @@
         }
       },
       "gas_costs": {
-        "title": "Step 8 of 8 – Gas Fixed Costs",
+        "title": "Step 9 of 9 – Gas Fixed Costs",
         "description": "{note}",
         "data": {
           "distribution": "Distribution (EUR/kWh)",

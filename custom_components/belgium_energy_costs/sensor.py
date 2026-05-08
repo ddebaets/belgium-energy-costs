@@ -79,10 +79,10 @@ from .const import (
     COST_GAS_COTISATION,
     COST_GAS_ACCISE,
     COST_GAS_FIXED_MONTHLY,
-    ENGIE_SENSOR_ELEC_PEAK,
-    ENGIE_SENSOR_ELEC_OFFPEAK,
-    ENGIE_SENSOR_ELEC_INJECTION,
-    ENGIE_SENSOR_GAS,
+    CONF_ENGIE_ELEC_PEAK,
+    CONF_ENGIE_ELEC_OFFPEAK,
+    CONF_ENGIE_ELEC_INJECTION,
+    CONF_ENGIE_GAS,
     SENSOR_MONTHS_SINCE_START,
     SENSOR_TOTAL_ELEC_PEAK,
     SENSOR_TOTAL_ELEC_OFFPEAK,
@@ -226,6 +226,11 @@ class BelgiumEnergyCostSensor(SensorEntity):
         self._entry_id = entry_id
         self._throttle = throttle
         self._contract_start: date = config[CONF_CONTRACT_START_DATE]
+        # ENGIE sensor entity IDs — user-selected during setup, stored in config
+        self._engie_peak = config.get(CONF_ENGIE_ELEC_PEAK, "")
+        self._engie_offpeak = config.get(CONF_ENGIE_ELEC_OFFPEAK, "")
+        self._engie_injection = config.get(CONF_ENGIE_ELEC_INJECTION, "")
+        self._engie_gas = config.get(CONF_ENGIE_GAS, "")
 
     # ------------------------------------------------------------------
     # Subclass API
@@ -328,11 +333,10 @@ class _ElecPriceBase(BelgiumEnergyCostSensor):
         self._attr_device_class = SensorDeviceClass.MONETARY
 
     def _source_entities(self) -> list[str]:
-        return [self._engie_sensor]
+        return []  # overridden by each subclass
 
 
 class TotalElectricityCostPeakSensor(_ElecPriceBase):
-    _engie_sensor = ENGIE_SENSOR_ELEC_PEAK
 
     def __init__(self, hass, config, entry_id, throttle, costs):
         super().__init__(hass, config, entry_id, throttle, costs)
@@ -340,9 +344,12 @@ class TotalElectricityCostPeakSensor(_ElecPriceBase):
         self._attr_unique_id = self._uid(SENSOR_TOTAL_ELEC_PEAK)
         self._attr_icon = "mdi:lightning-bolt"
 
+    def _source_entities(self) -> list[str]:
+        return [self._engie_peak]
+
     @property
     def native_value(self) -> float:
-        energy = self._get_state_value(ENGIE_SENSOR_ELEC_PEAK)
+        energy = self._get_state_value(self._engie_peak)
         return round(
             energy
             + self._costs[COST_GREEN_CERT]
@@ -355,7 +362,7 @@ class TotalElectricityCostPeakSensor(_ElecPriceBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        energy = self._get_state_value(ENGIE_SENSOR_ELEC_PEAK)
+        energy = self._get_state_value(self._engie_peak)
         return {
             "breakdown": (
                 f"Energy (ENGIE): {energy:.5f} EUR/kWh\n"
@@ -370,7 +377,6 @@ class TotalElectricityCostPeakSensor(_ElecPriceBase):
 
 
 class TotalElectricityCostOffPeakSensor(_ElecPriceBase):
-    _engie_sensor = ENGIE_SENSOR_ELEC_OFFPEAK
 
     def __init__(self, hass, config, entry_id, throttle, costs):
         super().__init__(hass, config, entry_id, throttle, costs)
@@ -378,9 +384,12 @@ class TotalElectricityCostOffPeakSensor(_ElecPriceBase):
         self._attr_unique_id = self._uid(SENSOR_TOTAL_ELEC_OFFPEAK)
         self._attr_icon = "mdi:lightning-bolt-outline"
 
+    def _source_entities(self) -> list[str]:
+        return [self._engie_offpeak]
+
     @property
     def native_value(self) -> float:
-        energy = self._get_state_value(ENGIE_SENSOR_ELEC_OFFPEAK)
+        energy = self._get_state_value(self._engie_offpeak)
         return round(
             energy
             + self._costs[COST_GREEN_CERT]
@@ -393,7 +402,7 @@ class TotalElectricityCostOffPeakSensor(_ElecPriceBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        energy = self._get_state_value(ENGIE_SENSOR_ELEC_OFFPEAK)
+        energy = self._get_state_value(self._engie_offpeak)
         return {
             "breakdown": (
                 f"Energy (ENGIE): {energy:.5f} EUR/kWh\n"
@@ -410,17 +419,18 @@ class TotalElectricityCostOffPeakSensor(_ElecPriceBase):
 class TotalElectricityCostSingleSensor(_ElecPriceBase):
     """Single-tariff total electricity cost per kWh."""
 
-    _engie_sensor = ENGIE_SENSOR_ELEC_PEAK  # single tariff uses the peak price feed
-
     def __init__(self, hass, config, entry_id, throttle, costs):
         super().__init__(hass, config, entry_id, throttle, costs)
         self._attr_name = "Total Electricity Cost"
         self._attr_unique_id = self._uid(SENSOR_TOTAL_ELEC_SINGLE)
         self._attr_icon = "mdi:lightning-bolt"
 
+    def _source_entities(self) -> list[str]:
+        return [self._engie_peak]  # single tariff uses peak price feed
+
     @property
     def native_value(self) -> float:
-        energy = self._get_state_value(ENGIE_SENSOR_ELEC_PEAK)
+        energy = self._get_state_value(self._engie_peak)
         return round(
             energy
             + self._costs[COST_GREEN_CERT]
@@ -433,7 +443,7 @@ class TotalElectricityCostSingleSensor(_ElecPriceBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        energy = self._get_state_value(ENGIE_SENSOR_ELEC_PEAK)
+        energy = self._get_state_value(self._engie_peak)
         return {
             "breakdown": (
                 f"Energy (ENGIE): {energy:.5f} EUR/kWh\n"
@@ -462,7 +472,7 @@ class ElectricityPeakOffPeakSavingsSensor(BelgiumEnergyCostSensor):
         self._attr_icon = "mdi:piggy-bank"
 
     def _source_entities(self) -> list[str]:
-        return [ENGIE_SENSOR_ELEC_PEAK, ENGIE_SENSOR_ELEC_OFFPEAK]
+        return [self._engie_peak, self._engie_offpeak]
 
     @property
     def native_value(self) -> float:
@@ -485,11 +495,11 @@ class TotalElectricityInjectionPriceSensor(BelgiumEnergyCostSensor):
         self._attr_icon = "mdi:solar-power"
 
     def _source_entities(self) -> list[str]:
-        return [ENGIE_SENSOR_ELEC_INJECTION]
+        return [self._engie_injection]
 
     @property
     def native_value(self) -> float:
-        return self._get_state_value(ENGIE_SENSOR_ELEC_INJECTION)
+        return self._get_state_value(self._engie_injection)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -509,11 +519,11 @@ class TotalGasCostPerKwhSensor(BelgiumEnergyCostSensor):
         self._attr_icon = "mdi:fire"
 
     def _source_entities(self) -> list[str]:
-        return [ENGIE_SENSOR_GAS]
+        return [self._engie_gas]
 
     @property
     def native_value(self) -> float:
-        energy = self._get_state_value(ENGIE_SENSOR_GAS)
+        energy = self._get_state_value(self._engie_gas)
         return round(
             energy
             + self._costs[COST_GAS_DISTRIBUTION]
@@ -525,7 +535,7 @@ class TotalGasCostPerKwhSensor(BelgiumEnergyCostSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        energy = self._get_state_value(ENGIE_SENSOR_GAS)
+        energy = self._get_state_value(self._engie_gas)
         return {
             "breakdown": (
                 f"Energy (ENGIE): {energy:.5f} EUR/kWh\n"
@@ -668,7 +678,7 @@ class ElectricityExportRevenueSensor(BelgiumEnergyCostSensor):
         self._attr_icon = "mdi:cash-plus"
 
     def _source_entities(self) -> list[str]:
-        return [ENGIE_SENSOR_ELEC_INJECTION] + self._export_total._source_entities()
+        return [self._engie_injection] + self._export_total._source_entities()
 
     @property
     def native_value(self) -> float:
@@ -721,10 +731,10 @@ class ElectricityTotalCostSensor(BelgiumEnergyCostSensor):
             return [
                 self._peak_consumption._p1_entity,
                 self._offpeak_consumption._p1_entity,
-                ENGIE_SENSOR_ELEC_PEAK,
-                ENGIE_SENSOR_ELEC_OFFPEAK,
+                self._engie_peak,
+                self._engie_offpeak,
             ]
-        return [self._single_consumption._p1_entity, ENGIE_SENSOR_ELEC_PEAK]
+        return [self._single_consumption._p1_entity, self._engie_peak]
 
     @property
     def native_value(self) -> float:
@@ -1268,6 +1278,9 @@ async def async_setup_entry(
     """Build and register all sensors for one config entry."""
 
     conf: dict = dict(entry.data)
+
+    # Make ENGIE sensor IDs available at the top level of conf
+    # (they are already stored there by _async_create_entry)
 
     # Parse per-utility contract start dates (stored as ISO strings in config entry).
     elec = dict(conf[CONF_ELECTRICITY])
