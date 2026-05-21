@@ -420,7 +420,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "note": _step_note(
                     10,
-                    "Enter fixed electricity costs from your ENGIE contract (pages 21–22). "
+                    "Enter fixed electricity costs from your ENGIE contract. "
                     "All values in EUR/kWh except fixed monthly (EUR/month). "
                     "These can be updated later via the integration options.",
                 ),
@@ -510,7 +510,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "note": _step_note(
                     10,
-                    "Enter fixed gas costs from your ENGIE contract (pages 25–26). "
+                    "Enter fixed gas costs from your ENGIE contract. "
                     "All values in EUR/kWh except fixed monthly (EUR/month). "
                     "These can be updated later via the integration options.",
                 ),
@@ -643,7 +643,7 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="electricity_costs",
             data_schema=schema,
-            description_placeholders={"note": "Update values from your new ENGIE contract (pages 21–22)."},
+            description_placeholders={"note": "Update values from your new ENGIE contract."},
         )
 
     async def async_step_gas_costs(
@@ -669,7 +669,7 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
                 vol.Required(COST_GAS_ACCISE, default=current.get(COST_GAS_ACCISE, 0.00872)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
                 vol.Required(COST_GAS_FIXED_MONTHLY, default=current.get(COST_GAS_FIXED_MONTHLY, 7.57)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             }),
-            description_placeholders={"note": "Update values from your new ENGIE contract (pages 25–26)."},
+            description_placeholders={"note": "Update values from your new ENGIE contract."},
         )
 
     async def async_step_gas_reading(

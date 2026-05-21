@@ -11,11 +11,11 @@ We need help supporting all Belgian regions! If you live in **Flanders** or **Wa
 1. **Open an Issue**
    - Go to [Issues](https://github.com/ddebaets/belgium-energy-costs/issues/new)
    - Title: "Regional Support: [Your Region]"
-   - Include your ENGIE contract pages:
-     - Pages 21-22 for electricity costs
-     - Pages 25-26 for gas costs
+   - Include your ENGIE contract fixed costs:
+     - Fixed electricity costs
+     - Fixed gas costs
    - Mention your grid operator (Fluvius, ORES, RESA, AIEG, AIESH)
-   - Share your gas conversion factor (usually on page 26)
+   - Share your gas conversion factor
 
 2. **We'll Verify and Add**
    - We'll verify the cost structure matches the region

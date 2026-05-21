@@ -22,7 +22,7 @@ A Home Assistant custom integration that tracks **real-time total energy costs**
 | 🟡 **Flanders** | Fluvius | ⚠️ Coming Soon | ~11.0 kWh/m³ |
 | 🟡 **Wallonia** | ORES/RESA/AIEG/AIESH | ⚠️ Coming Soon | ~11.0 kWh/m³ |
 
-> **Help wanted!** If you're in Flanders or Wallonia, please [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details (pages 21–22 for electricity, 25–26 for gas) so we can add verified defaults for your region.
+> **Help wanted!** If you're in Flanders or Wallonia, please [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details (fixed electricity and gas costs) so we can add verified defaults for your region.
 
 ## Prerequisites
 
@@ -56,9 +56,9 @@ A Home Assistant custom integration that tracks **real-time total energy costs**
 | 3 | Electricity meter type (bi-horaire or single tariff) |
 | 4 | P1 meter sensors + baseline readings at contract start |
 | 5 | Solar export sensor (optional) |
-| 6 | Electricity fixed costs (from ENGIE contract pages 21–22) |
+| 6 | Electricity fixed costs (from your ENGIE contract) |
 | 7 | Gas meter readings (baseline at contract start + today's reading) + conversion factor |
-| 8 | Gas fixed costs (from ENGIE contract pages 25–26) |
+| 8 | Gas fixed costs (from your ENGIE contract) |
 
 All cost values can be updated later via **Settings → Devices & Services → Belgium Energy Costs → Configure** — no restart required.
 
