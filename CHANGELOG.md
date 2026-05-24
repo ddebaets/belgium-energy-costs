@@ -2,6 +2,21 @@
 
 All notable changes to the Belgium Energy Costs integration are documented here.
 
+## [5.6.0] - 2026-05-24
+
+### Added
+- **"Update ENGIE Sensors" option in the options flow** — re-select your ENGIE Belgium
+  price sensors without reinstalling the integration. Use this after upgrading
+  hass-engie-be to v0.9.0, which changes entity IDs from customer account number (CAN)
+  to business agreement number (BAN) format and requires a full reinstall of that
+  integration. Your contract dates, cost components, and baseline readings are preserved.
+
+## [5.5.0] - 2026-04-15
+
+### Added
+- Dynamic ENGIE sensor selection in the setup wizard — compatible with hass-engie-be v0.8.2,
+  which changed entity IDs to include the account ID and EAN number.
+
 ## [5.4.0] - 2026-04-03
 
 This release is a near-complete architectural rewrite focused on correctness,

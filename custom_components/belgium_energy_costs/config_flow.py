@@ -604,7 +604,78 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
         """Show the options menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["electricity_costs", "gas_costs", "gas_reading"],
+            menu_options=["engie_sensors", "electricity_costs", "gas_costs", "gas_reading"],
+        )
+
+    async def async_step_engie_sensors(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Re-select ENGIE Belgium price sensors (needed after hass-engie-be upgrades)."""
+        errors: dict[str, str] = {}
+        meter_type = self.config_entry.data[CONF_ELECTRICITY][CONF_METER_TYPE]
+
+        if user_input is not None:
+            required = [CONF_ENGIE_ELEC_PEAK]
+            if meter_type == METER_TYPE_BI_HORAIRE:
+                required.append(CONF_ENGIE_ELEC_OFFPEAK)
+            for field in required:
+                if not self.hass.states.get(user_input[field]):
+                    errors[field] = "entity_not_found"
+            for field in (CONF_ENGIE_ELEC_INJECTION, CONF_ENGIE_GAS):
+                val = user_input.get(field)
+                if val and not self.hass.states.get(val):
+                    errors[field] = "entity_not_found"
+
+            if not errors:
+                new_data = copy.deepcopy(dict(self.config_entry.data))
+                new_data[CONF_ENGIE_ELEC_PEAK] = user_input[CONF_ENGIE_ELEC_PEAK]
+                new_data[CONF_ENGIE_ELEC_OFFPEAK] = user_input.get(CONF_ENGIE_ELEC_OFFPEAK, "")
+                new_data[CONF_ENGIE_ELEC_INJECTION] = user_input.get(CONF_ENGIE_ELEC_INJECTION, "")
+                new_data[CONF_ENGIE_GAS] = user_input.get(CONF_ENGIE_GAS, "")
+                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+                return self.async_create_entry(title="", data={})
+
+        if meter_type == METER_TYPE_BI_HORAIRE:
+            schema = vol.Schema({
+                vol.Required(CONF_ENGIE_ELEC_PEAK): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Required(CONF_ENGIE_ELEC_OFFPEAK): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_ELEC_INJECTION): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_GAS): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+            })
+        else:
+            schema = vol.Schema({
+                vol.Required(CONF_ENGIE_ELEC_PEAK): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_ELEC_INJECTION): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+                vol.Optional(CONF_ENGIE_GAS): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", integration="engie_be")
+                ),
+            })
+
+        return self.async_show_form(
+            step_id="engie_sensors",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "note": (
+                    "Re-select your ENGIE Belgium price sensors.\n"
+                    "Use this after upgrading hass-engie-be — entity IDs change between major releases "
+                    "(e.g. v0.8.x → v0.9.0 switches from account number to business agreement number).\n"
+                    "Look for sensors named 'Electricity peak offtake price', "
+                    "'Electricity off-peak offtake price', and 'Gas offtake price'."
+                ),
+            },
         )
 
     async def async_step_electricity_costs(

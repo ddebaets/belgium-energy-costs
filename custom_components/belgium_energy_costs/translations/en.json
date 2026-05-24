@@ -108,9 +108,20 @@
       "init": {
         "title": "Belgium Energy Costs – Options",
         "menu_options": {
+          "engie_sensors": "📡 Update ENGIE Sensors",
           "electricity_costs": "⚡ Update Electricity Costs",
           "gas_costs": "🔥 Update Gas Costs",
           "gas_reading": "🔢 Update Gas Meter Reading"
+        }
+      },
+      "engie_sensors": {
+        "title": "📡 Update ENGIE Price Sensors",
+        "description": "{note}",
+        "data": {
+          "engie_elec_peak_sensor": "Electricity peak offtake price sensor",
+          "engie_elec_offpeak_sensor": "Electricity off-peak offtake price sensor",
+          "engie_elec_injection_sensor": "Electricity injection price sensor (optional)",
+          "engie_gas_sensor": "Gas offtake price sensor (optional)"
         }
       },
       "electricity_costs": {
