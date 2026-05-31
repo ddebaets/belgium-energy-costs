@@ -2,16 +2,19 @@
 
 All notable changes to the Belgium Energy Costs integration are documented here.
 
-## [5.7.0] - 2026-05-31
+## [5.7.1] - 2026-05-31
 
 ### Changed
-- **Consistent display precision on all sensors.** Currency amount sensors (totals,
-  monthly averages, annual projections, export revenue) now declare
-  `suggested_display_precision = 2`, so every EUR amount shows exactly two decimals
-  in the dashboard, Energy tab, and history — no more values like `1495.0 €`.
-  Per-kWh price sensors explicitly keep 5 decimals so rates stay meaningful.
-  Existing installs pick this up automatically on update (a manual per-entity
+- **Consistent display precision on all sensors.** The base sensor now declares a
+  unit-driven `suggested_display_precision`: currency amounts (totals, monthly
+  averages, annual projections, export revenue) show exactly two decimals in the
+  dashboard, Energy tab, and history — no more values like `1495.0 €` — while
+  per-kWh price sensors keep five decimals so rates stay meaningful. Existing
+  installs pick this up automatically on update (a manual per-entity
   display-precision override, if you set one, still takes priority).
+
+> Note: 5.7.0 bumped the version metadata but did not include the code change;
+> 5.7.1 carries the actual fix. Update straight to 5.7.1.
 
 ## [5.6.0] - 2026-05-24
 
