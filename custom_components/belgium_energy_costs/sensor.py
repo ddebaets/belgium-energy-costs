@@ -270,6 +270,22 @@ class BelgiumEnergyCostSensor(SensorEntity):
         """Config-entry-scoped unique ID."""
         return f"{DOMAIN}_{self._entry_id}_{suffix}"
 
+    @property
+    def suggested_display_precision(self) -> int | None:
+        """Default display precision, driven by the sensor's unit.
+
+        Currency amounts (EUR) always show two decimals; per-kWh prices keep
+        five so sub-cent rates stay meaningful. Any other unit (kWh, m³) is
+        left to Home Assistant's own default. A manual per-entity override set
+        in the UI still takes priority over this suggestion.
+        """
+        unit = self.native_unit_of_measurement
+        if unit == CURRENCY_EURO:
+            return 2
+        if unit == f"{CURRENCY_EURO}/kWh":
+            return 5
+        return None
+
     # ------------------------------------------------------------------
     # HA lifecycle
     # ------------------------------------------------------------------
