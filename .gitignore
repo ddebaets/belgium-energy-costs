@@ -41,3 +41,7 @@ htmlcov/
 venv/
 ENV/
 env/
+
+# Local HA helper scripts containing tokens — never commit
+.ha_ws.py
+ha_ws.py
