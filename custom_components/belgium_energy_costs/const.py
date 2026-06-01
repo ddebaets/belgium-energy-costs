@@ -27,7 +27,8 @@ REGIONAL_DEFAULTS = {
     REGION_BRUSSELS: {
         "name": "Brussels",
         "grid_operator": "SIBELGA",
-        "gas_conversion": 11.2,
+        # Calibrated against a full 359-day SIBELGA gas bill (1481 m³ → 16865 kWh).
+        "gas_conversion": 11.39,
         "supported": True,
         "description": "Brussels-Capital Region (SIBELGA)",
     },
@@ -74,7 +75,7 @@ COST_GAS_ACCISE = "accise_federale"
 COST_GAS_FIXED_MONTHLY = "fixed_monthly"
 
 # Default values
-DEFAULT_GAS_CONVERSION = 11.2  # kWh/m³ for Brussels/SIBELGA
+DEFAULT_GAS_CONVERSION = 11.39  # kWh/m³ for Brussels/SIBELGA (calibrated from a full annual bill)
 DEFAULT_DAYS_PER_MONTH = 30.44
 
 # Config keys for user-selected ENGIE sensor entity IDs

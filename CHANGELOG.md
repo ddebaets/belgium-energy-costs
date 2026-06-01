@@ -2,6 +2,21 @@
 
 All notable changes to the Belgium Energy Costs integration are documented here.
 
+## [5.8.0] - 2026-05-31
+
+### Added
+- **Editable gas conversion factor.** A new "📐 Update Gas Conversion Factor" option
+  in the integration's options flow lets you change the kWh/m³ factor after setup —
+  no reinstall needed. The most accurate value is your own: divide the kWh billed on
+  your annual statement by the m³ consumed over the same period.
+
+### Changed
+- **SIBELGA (Brussels) default conversion factor: 11.2 → 11.39 kWh/m³.** Calibrated
+  against a full 359-day SIBELGA gas bill (1481 m³ → 16 865 kWh). The old 11.2
+  placeholder under-counted gas energy by ~1.65%. New installs use 11.39 automatically;
+  existing installs keep their configured value — update it via the new options step
+  above if you want the calibrated default.
+
 ## [5.7.1] - 2026-05-31
 
 ### Changed

@@ -18,7 +18,7 @@ A Home Assistant custom integration that tracks **real-time total energy costs**
 
 | Region | Grid Operator | Status | Gas Conversion |
 |--------|---------------|--------|----------------|
-| 🟢 **Brussels** | SIBELGA | ✅ Fully Supported | 11.2 kWh/m³ |
+| 🟢 **Brussels** | SIBELGA | ✅ Fully Supported | 11.39 kWh/m³ |
 | 🟡 **Flanders** | Fluvius | ⚠️ Coming Soon | ~11.0 kWh/m³ |
 | 🟡 **Wallonia** | ORES/RESA/AIEG/AIESH | ⚠️ Coming Soon | ~11.0 kWh/m³ |
 

@@ -604,7 +604,7 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
         """Show the options menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["engie_sensors", "electricity_costs", "gas_costs", "gas_reading"],
+            menu_options=["engie_sensors", "electricity_costs", "gas_costs", "gas_reading", "gas_conversion"],
         )
 
     async def async_step_engie_sensors(
@@ -777,5 +777,42 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
             }),
             description_placeholders={
                 "note": "Enter your current gas meter reading (update monthly on the 1st).",
+            },
+        )
+
+    async def async_step_gas_conversion(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Update the gas volume→energy conversion factor (kWh/m³)."""
+        if not self.config_entry.data[CONF_GAS][CONF_ENABLED]:
+            return self.async_abort(reason="gas_not_enabled")
+
+        if user_input is not None:
+            new_data = copy.deepcopy(dict(self.config_entry.data))
+            new_data[CONF_GAS][CONF_CONVERSION_FACTOR] = user_input[CONF_CONVERSION_FACTOR]
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+            return self.async_create_entry(title="", data={})
+
+        region = self.config_entry.data.get(CONF_REGION, REGION_BRUSSELS)
+        default_conversion = REGIONAL_DEFAULTS[region]["gas_conversion"]
+        grid_operator = REGIONAL_DEFAULTS[region]["grid_operator"]
+        current = self.config_entry.data[CONF_GAS].get(CONF_CONVERSION_FACTOR, default_conversion)
+
+        return self.async_show_form(
+            step_id="gas_conversion",
+            data_schema=vol.Schema({
+                vol.Required(CONF_CONVERSION_FACTOR, default=current): NumberSelector(
+                    NumberSelectorConfig(min=8, max=14, step=0.0001,
+                                        mode=NumberSelectorMode.BOX,
+                                        unit_of_measurement="kWh/m³")
+                ),
+            }),
+            description_placeholders={
+                "note": (
+                    f"Gas volume→energy conversion factor for {grid_operator}.\n"
+                    f"The most accurate value is your own: divide the kWh billed on your "
+                    f"annual statement by the m³ consumed over the same period. "
+                    f"Default for {grid_operator}: {default_conversion} kWh/m³."
+                ),
             },
         )

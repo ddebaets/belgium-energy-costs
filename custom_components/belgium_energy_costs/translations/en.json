@@ -111,7 +111,8 @@
           "engie_sensors": "📡 Update ENGIE Sensors",
           "electricity_costs": "⚡ Update Electricity Costs",
           "gas_costs": "🔥 Update Gas Costs",
-          "gas_reading": "🔢 Update Gas Meter Reading"
+          "gas_reading": "🔢 Update Gas Meter Reading",
+          "gas_conversion": "📐 Update Gas Conversion Factor"
         }
       },
       "engie_sensors": {
@@ -154,6 +155,13 @@
         "description": "{note}",
         "data": {
           "gas_reading": "Current gas meter reading (m³)"
+        }
+      },
+      "gas_conversion": {
+        "title": "📐 Update Gas Conversion Factor",
+        "description": "{note}",
+        "data": {
+          "conversion_factor": "Gas conversion factor (kWh/m³)"
         }
       }
     },
