@@ -6,12 +6,13 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     DOMAIN,
-    CONF_ELECTRICITY,
     CONF_GAS,
     CONF_ENABLED,
     CONF_ENGIE_ELEC_PEAK,
@@ -21,7 +22,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SENSOR, Platform.NUMBER]
+PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.DATE]
 
 # Bump this when the config-entry schema or entity unique-ID format changes.
 # HA will call async_migrate_entry for entries stored at a lower version.
@@ -143,6 +144,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
+        # Also drop the per-entry year-history state (sensor refs + closures),
+        # else it leaks across reloads since _close_year reloads the entry.
+        hass.data.get(DOMAIN, {}).get("_year_history", {}).pop(entry.entry_id, None)
     return unload_ok
 
 
@@ -189,4 +193,208 @@ async def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> N
     hass.services.async_register(
         DOMAIN, "update_gas_reading", _handle_update_gas_reading,
         schema=vol.Schema({vol.Required("reading"): vol.Coerce(float)}),
+    )
+
+    async def _close_year(entry_id: str, util: str, period_end_iso: str | None = None,
+                          *, reload: bool = True) -> bool:
+        """Close the current contract year for one utility of one config entry.
+
+        Records the utility's current lifetime ("since contract start") values
+        as a snapshot, from which per-year deltas are derived. ``period_end_iso``
+        lets you record the *actual* billing end (e.g. the meter-read date),
+        which can differ from the calendar anniversary. Returns True if a
+        snapshot was written. Fail-safe: logs and returns False on any error.
+        """
+        from datetime import date as _date
+
+        store = hass.data.get(DOMAIN, {}).get("_year_history", {}).get(entry_id)
+        if not store:
+            _LOGGER.warning(
+                "close contract year: no year-history state for entry %s; "
+                "is the integration fully loaded?", entry_id,
+            )
+            return False
+
+        meta = store.get(util)
+        if not meta:
+            _LOGGER.warning("close contract year: utility '%s' not configured", util)
+            return False
+
+        history = store["history"]
+        try:
+            from .contract_year import _safe_anniversary
+
+            start = meta["start"]
+            metrics = meta["metrics"]          # cumulative consumption sensors
+            cost_fn = meta["cost_fn"]          # freezes this year's cost
+
+            # Abort if any consumption sensor isn't ready yet: coercing a missing
+            # reading to 0.0 would store a wrong cumulative baseline and make the
+            # NEXT period double-count. (Only realistically possible in the first
+            # seconds after a restart.)
+            if any(s.native_value is None for s in metrics.values()):
+                _LOGGER.warning(
+                    "Skipping contract-year close for '%s': a consumption sensor "
+                    "is not ready (None). Try again once values are populated.", util,
+                )
+                return False
+
+            # Lifetime cumulative consumption at close (for next-year deltas).
+            cumulative = {k: float(s.native_value or 0.0) for k, s in metrics.items()}
+
+            today = _date.today()
+            # Resolve period_end, in priority order:
+            #   1. explicit arg (cv.date object or ISO string)
+            #   2. the utility's dashboard date-picker entity, if the user set one
+            #   3. today
+            if isinstance(period_end_iso, _date):
+                period_end = period_end_iso
+            elif period_end_iso:
+                period_end = _date.fromisoformat(str(period_end_iso))
+            else:
+                period_end = today
+                from .const import get_close_date_entity_id
+                picker = hass.states.get(get_close_date_entity_id(entry_id, util))
+                if picker and picker.state not in (None, "", "unknown", "unavailable"):
+                    try:
+                        period_end = _date.fromisoformat(picker.state)
+                    except (ValueError, TypeError):
+                        pass
+
+            next_index = history.completed_year_count(util) + 1
+
+            # This year's own consumption = lifetime − previous close cumulative.
+            base = history.last_cumulative(util)
+            year_cons = {k: max(0.0, cumulative.get(k, 0.0) - base.get(k, 0.0)) for k in cumulative}
+
+            # Guard: a contract year with ZERO consumption is never a real close.
+            # This blocks spurious closes (e.g. an automatic rollover firing right
+            # after a manual one, or a reload re-trigger) from inserting an empty
+            # phantom year. Manual closes of a genuinely-empty year are vanishingly
+            # rare; if needed, the user can still close after some usage exists.
+            if sum(year_cons.values()) <= 0.0:
+                _LOGGER.warning(
+                    "Skipping contract-year close for '%s': zero consumption "
+                    "since last close (would create an empty phantom year).", util,
+                )
+                return False
+
+            # Months in the year being closed: anniversary that started it → period_end.
+            year_start = _safe_anniversary(start, start.year + (next_index - 1))
+            months = max(0.0, (period_end - year_start).days / 30.44)
+            # FREEZE the cost using the same formula the live sensor uses.
+            year_cost = cost_fn(year_cons, months)
+
+            await history.async_append_snapshot(
+                util, next_index, start,
+                period_end=period_end, closed_on=today,
+                cumulative=cumulative, year_cost=year_cost,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("close contract year failed for utility '%s'", util)
+            return False
+
+        if reload:
+            await hass.config_entries.async_reload(entry_id)
+        return True
+
+    def _all_entry_ids() -> list[str]:
+        """All config-entry IDs that have year-history state stashed."""
+        return list(hass.data.get(DOMAIN, {}).get("_year_history", {}).keys())
+
+    async def _handle_close_elec(call) -> None:
+        for eid in _all_entry_ids():
+            await _close_year(eid, "elec", call.data.get("period_end"))
+
+    async def _handle_close_gas(call) -> None:
+        for eid in _all_entry_ids():
+            await _close_year(eid, "gas", call.data.get("period_end"))
+
+    _period_end_schema = vol.Schema({
+        vol.Optional("period_end"): cv.date,
+    })
+
+    if not hass.services.has_service(DOMAIN, "close_electricity_billing_period"):
+        hass.services.async_register(
+            DOMAIN, "close_electricity_billing_period",
+            _handle_close_elec, schema=_period_end_schema,
+        )
+    if not hass.services.has_service(DOMAIN, "close_gas_billing_period"):
+        hass.services.async_register(
+            DOMAIN, "close_gas_billing_period",
+            _handle_close_gas, schema=_period_end_schema,
+        )
+
+    async def _undo_last_close(entry_id: str, util: str) -> None:
+        """Remove the most recent contract-year snapshot for *util* (undo)."""
+        store = hass.data.get(DOMAIN, {}).get("_year_history", {}).get(entry_id)
+        if not store or not store.get(util):
+            _LOGGER.warning("undo close: utility '%s' not available", util)
+            return
+        try:
+            removed = await store["history"].async_remove_last_snapshot(util)
+            if removed:
+                await hass.config_entries.async_reload(entry_id)
+            else:
+                _LOGGER.info("undo close: no snapshot to remove for '%s'", util)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("undo close failed for utility '%s'", util)
+
+    async def _handle_undo_elec(call) -> None:
+        for eid in _all_entry_ids():
+            await _undo_last_close(eid, "elec")
+
+    async def _handle_undo_gas(call) -> None:
+        for eid in _all_entry_ids():
+            await _undo_last_close(eid, "gas")
+
+    if not hass.services.has_service(DOMAIN, "undo_electricity_billing_period"):
+        hass.services.async_register(
+            DOMAIN, "undo_electricity_billing_period", _handle_undo_elec,
+            schema=vol.Schema({}),
+        )
+    if not hass.services.has_service(DOMAIN, "undo_gas_billing_period"):
+        hass.services.async_register(
+            DOMAIN, "undo_gas_billing_period", _handle_undo_gas,
+            schema=vol.Schema({}),
+        )
+
+    # --- Automatic anniversary rollover (daily check, per utility) ----------
+    # Fires once per day; closes a utility's year only if its calendar
+    # anniversary has passed AND it hasn't already been closed manually
+    # (so an early manual close suppresses the auto one — no double-count).
+    async def _daily_rollover_check(now=None) -> None:
+        # This timer is registered per config entry, so it scopes to this entry.
+        from datetime import date as _date
+        from .contract_year import due_year_index
+
+        store = hass.data.get(DOMAIN, {}).get("_year_history", {}).get(entry.entry_id)
+        if not store:
+            return
+        history = store["history"]
+        today = _date.today()
+        did_close = False
+        for util in ("elec", "gas"):
+            meta = store.get(util)
+            if not meta:
+                continue
+            try:
+                already = history.completed_year_count(util)
+                if due_year_index(meta["start"], today, already) is not None:
+                    # reload once at the end, not per-utility
+                    if await _close_year(entry.entry_id, util, reload=False):
+                        did_close = True
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("auto rollover check failed for utility '%s'", util)
+        if did_close:
+            await hass.config_entries.async_reload(entry.entry_id)
+
+    # Run shortly after midnight every day. We deliberately do NOT run the
+    # check eagerly on setup: setup re-runs on every reload (and _close_year
+    # reloads), so an eager call creates a reload cascade. The daily timer plus
+    # the zero-consumption guard in _close_year are sufficient — a genuinely
+    # missed anniversary is caught at the next midnight tick, and the guard
+    # prevents any spurious empty close in the meantime.
+    entry.async_on_unload(
+        async_track_time_change(hass, _daily_rollover_check, hour=0, minute=5, second=0)
     )

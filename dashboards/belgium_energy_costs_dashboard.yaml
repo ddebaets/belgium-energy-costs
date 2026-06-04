@@ -1,0 +1,176 @@
+# Belgium Energy Costs — ready-made dashboard
+#
+# Home Assistant does not let an integration auto-create a sidebar dashboard,
+# so import this manually (one-time):
+#
+#   Settings → Dashboards → (top-right ⋮) → "Take control" is NOT needed.
+#   Easiest path:
+#     1. Create a new empty dashboard (Settings → Dashboards → + Add dashboard).
+#     2. Open it → ⋮ (top-right) → "Edit dashboard" → ⋮ → "Raw configuration editor".
+#     3. Paste the YAML below (everything under `views:`) and Save.
+#
+# ⚠️ ONE REQUIRED EDIT — gas meter + date-picker entity IDs are instance-scoped.
+#   The `number.` (gas meter) and `date.` (period-end pickers) entities include
+#   your config entry's unique ID. In this file they appear as:
+#       number.belgium_energy_costs_gas_meter_reading
+#       date.belgium_energy_costs_elec_close_date
+#       date.belgium_energy_costs_gas_close_date
+#   On your system they are actually:
+#       number.belgium_energy_costs_<ID>_gas_meter_reading   (etc.)
+#   Find <ID>: Settings → Devices & Services → Belgium Energy Costs → Entities,
+#   click the gas meter entity and copy its real entity_id. Then do a
+#   find-and-replace in the YAML below before saving. (The sensor.* entities use
+#   generic IDs and need no change for a single-instance setup.)
+#
+# This dashboard uses only BUILT-IN cards (no HACS frontend cards required).
+
+views:
+  - title: Energy Costs
+    path: belgium-energy-costs
+    icon: mdi:transmission-tower
+    type: sections
+    sections:
+      # ── Electricity ─────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: ⚡ Electricity
+            heading_style: title
+          - type: entities
+            title: Current Rates
+            entities:
+              - entity: sensor.total_electricity_cost_peak
+                name: Peak rate
+              - entity: sensor.total_electricity_cost_off_peak
+                name: Off-peak rate
+              - entity: sensor.electricity_peak_vs_off_peak_savings
+                name: Peak vs off-peak
+          - type: entities
+            title: Consumption & Cost
+            entities:
+              - entity: sensor.electricity_peak_consumption_since_contract_start
+                name: Peak consumption
+              - entity: sensor.electricity_off_peak_consumption_since_contract_start
+                name: Off-peak consumption
+              - entity: sensor.electricity_total_cost_since_contract_start
+                name: Total cost (lifetime)
+              - entity: sensor.electricity_estimated_annual_cost
+                name: Estimated annual
+
+      # ── Gas ─────────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 🔥 Gas
+            heading_style: title
+          - type: entities
+            title: Gas
+            entities:
+              - entity: sensor.total_gas_cost
+                name: Current rate
+              - entity: sensor.gas_consumption_since_contract_start
+                name: Consumption (m³)
+              - entity: sensor.gas_consumption_since_contract_start_kwh
+                name: Consumption (kWh)
+              - entity: sensor.gas_total_cost_since_contract_start
+                name: Total cost (lifetime)
+              - entity: sensor.gas_estimated_annual_cost
+                name: Estimated annual
+              - entity: number.belgium_energy_costs_gas_meter_reading
+                name: Gas meter reading (m³)
+
+      # ── Combined ────────────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 💰 Combined
+            heading_style: title
+          - type: entities
+            entities:
+              - entity: sensor.total_energy_cost_since_contract_start
+                name: Total energy bill
+              - entity: sensor.total_average_monthly_energy_cost
+                name: Avg monthly cost
+              - entity: sensor.total_estimated_annual_energy_cost
+                name: Estimated annual total
+          - type: energy-distribution
+            link_dashboard: true
+
+      # ── Billing Periods ─────────────────────────────────────────────────
+      - type: grid
+        cards:
+          - type: heading
+            heading: 📅 Billing Periods
+            heading_style: title
+          # Year-over-year comparison table, rendered from the history sensors'
+          # `years` attribute (per-period kWh / m³ / frozen cost).
+          - type: markdown
+            content: >
+              {%- set gas = state_attr('sensor.gas_contract_year_history','years') or [] -%}
+              {%- set elec = state_attr('sensor.electricity_contract_year_history','years') or [] -%}
+              ## 📊 Cost & Consumption by Billing Period
+
+
+              **🔥 Gas**
+
+
+              | Period | kWh | m³ | Cost |
+              |---|--:|--:|--:|
+              {% for y in gas -%}
+              | {{ y.label }} | {{ y.totals.kwh | round(0) }} | {{ y.totals.m3 | round(0) }} | €{{ y.totals.cost | round(2) }} |
+              {% endfor %}
+              {%- if not gas %}
+
+              _No closed gas periods yet — close one below._{% endif %}
+
+
+              _Current gas period so far: €{{ states('sensor.gas_cost_this_contract_year') }}_
+
+
+              **⚡ Electricity**
+
+
+              | Period | Peak kWh | Off-peak kWh | Cost |
+              |---|--:|--:|--:|
+              {% for y in elec -%}
+              | {{ y.label }} | {{ y.totals.peak_kwh | round(0) }} | {{ y.totals.offpeak_kwh | round(0) }} | €{{ y.totals.cost | round(2) }} |
+              {% endfor %}
+              {%- if not elec %}
+
+              _No closed electricity periods yet — close one below._{% endif %}
+
+
+              _Current electricity period so far: €{{ states('sensor.electricity_cost_this_contract_year') }}_
+          - type: entities
+            title: Close a Billing Period
+            entities:
+              - entity: date.belgium_energy_costs_elec_close_date
+                name: ⚡ Electricity period-end date
+              - entity: date.belgium_energy_costs_gas_close_date
+                name: 🔥 Gas period-end date
+          - type: button
+            name: Close Electricity Billing Period
+            icon: mdi:calendar-check
+            tap_action:
+              action: perform-action
+              perform_action: belgium_energy_costs.close_electricity_billing_period
+              confirmation:
+                text: >-
+                  Close the current electricity billing period? This records its
+                  totals to history and starts a new period. Uses the period-end
+                  date above (or today if unset). You can undo via the
+                  undo_electricity_billing_period action.
+              data: {}
+          - type: button
+            name: Close Gas Billing Period
+            icon: mdi:calendar-check
+            tap_action:
+              action: perform-action
+              perform_action: belgium_energy_costs.close_gas_billing_period
+              confirmation:
+                text: >-
+                  Close the current gas billing period? This records its totals
+                  to history and starts a new period. Uses the period-end date
+                  above (or today if unset). You can undo via the
+                  undo_gas_billing_period action.
+              data: {}

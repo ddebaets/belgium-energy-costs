@@ -45,3 +45,6 @@ env/
 # Local HA helper scripts containing tokens — never commit
 .ha_ws.py
 ha_ws.py
+
+# Local contract-year snapshots (instance-specific data, not integration code)
+.contract-year-snapshots/

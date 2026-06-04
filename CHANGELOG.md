@@ -2,6 +2,43 @@
 
 All notable changes to the Belgium Energy Costs integration are documented here.
 
+## [5.9.0] - 2026-06-04
+
+Per-billing-period tracking, accurate cost accounting, and a ready-made dashboard.
+
+### Added
+- **Billing-period history.** Each contract year is recorded as a closed period
+  with its own consumption (kWh, m³) and a **frozen cost** captured at close — so
+  closed periods always match what you were billed and never drift when prices
+  change later. New sensors:
+  `sensor.electricity_billing_period_history`, `sensor.gas_billing_period_history`
+  (state = number of closed periods; full per-period breakdown in attributes), and
+  `sensor.electricity_cost_this_billing_period`, `sensor.gas_cost_this_billing_period`
+  (cost so far in the current period).
+- **Close a billing period — manually or automatically.** Services
+  `close_electricity_billing_period` / `close_gas_billing_period` (with an optional
+  `period_end` date for backdating / early meter reads), and matching
+  `undo_*` services to reverse a close. Periods also roll over **automatically** on
+  the contract anniversary (a daily check; a manual early close suppresses the
+  automatic one so a period is never closed twice).
+- **Period-end date pickers.** New `date` entities per utility let you set the exact
+  billing-period end on the dashboard before closing.
+- **Continuous cost accumulator.** New `sensor.electricity_cost_accumulated` /
+  `sensor.gas_cost_accumulated` price each kWh at the rate in force **when it was
+  consumed** (like the HA Energy dashboard), so they don't re-price history when the
+  ENGIE price moves. Accurate from first run (they seed from the current meter
+  reading; not retroactive).
+- **Ready-made dashboard** at `dashboards/belgium_energy_costs_dashboard.yaml` —
+  built-in cards only, with a year-over-year comparison table and close controls.
+  Import instructions and the one required entity-ID edit are documented in the file.
+
+### Notes
+- Electricity and gas are tracked independently (they can have different contract
+  anniversaries).
+- All of the above is **additive and fail-safe**: if any new component fails to
+  initialise it is logged and skipped, leaving the core cost sensors unaffected.
+- Existing entity IDs are unchanged, so dashboards and history carry over.
+
 ## [5.8.0] - 2026-05-31
 
 ### Added

@@ -14,3 +14,51 @@ update_gas_reading:
           step: 0.001
           mode: box
           unit_of_measurement: "m³"
+
+close_electricity_billing_period:
+  name: Close Electricity Billing Period
+  description: >
+    Close the current ELECTRICITY billing period and record its totals to the
+    per-period history. Use this to close a period manually — including early,
+    e.g. if the meter was read before the calendar anniversary. If you don't call
+    it, the period rolls over automatically on the anniversary date.
+  fields:
+    period_end:
+      name: Period end date
+      description: >
+        Actual end date of the billing period (e.g. the meter-read date).
+        Defaults to today (or the dashboard date picker) if omitted.
+      required: false
+      example: "2026-05-27"
+      selector:
+        date:
+
+close_gas_billing_period:
+  name: Close Gas Billing Period
+  description: >
+    Close the current GAS billing period and record its totals to the per-period
+    history. Use this to close a period manually — including early, e.g. if the
+    meter was read before the calendar anniversary. If you don't call it, the
+    period rolls over automatically on the anniversary date.
+  fields:
+    period_end:
+      name: Period end date
+      description: >
+        Actual end date of the billing period (e.g. the meter-read date).
+        Defaults to today (or the dashboard date picker) if omitted.
+      required: false
+      example: "2026-05-27"
+      selector:
+        date:
+
+undo_electricity_billing_period:
+  name: Undo Last Electricity Billing Period Close
+  description: >
+    Remove the most recently recorded ELECTRICITY billing-period snapshot.
+    Use this to correct an accidental or incorrect close.
+
+undo_gas_billing_period:
+  name: Undo Last Gas Billing Period Close
+  description: >
+    Remove the most recently recorded GAS billing-period snapshot.
+    Use this to correct an accidental or incorrect close.

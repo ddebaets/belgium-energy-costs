@@ -45,6 +45,13 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
+
+from .contract_year import (
+    ContractYearHistory,
+    UTILITY_ELEC,
+    UTILITY_GAS,
+    contract_year_label,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -1286,6 +1293,230 @@ class TotalAverageMonthlyEnergyCostSensor(BelgiumEnergyCostSensor):
 # Platform setup
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Per-contract-year history sensors (additive; never affect the core sensors)
+# ---------------------------------------------------------------------------
+
+class _YearHistoryBase(BelgiumEnergyCostSensor):
+    """Shared base for contract-year sensors.
+
+    ``cumulative_metrics`` maps a stable key → the lifetime (since-contract-start)
+    consumption sensor for that metric. These are *stable* quantities (kWh, m³),
+    so current-year consumption = lifetime − last close cumulative.
+    """
+
+    def __init__(self, hass, config, entry_id, throttle, *,
+                 utility: str, start: date, history: ContractYearHistory,
+                 cumulative_metrics: dict[str, "BelgiumEnergyCostSensor"],
+                 price_sensors: list["BelgiumEnergyCostSensor"] | None = None) -> None:
+        super().__init__(hass, config, entry_id, throttle)
+        self._utility = utility
+        self._start = start
+        self._history = history
+        self._cumulative_metrics = cumulative_metrics
+        # Price sensors whose value feeds cost_fn. The current-period cost must
+        # recompute when these change, not only when consumption ticks — else it
+        # goes stale between P1 updates while the ENGIE price moves.
+        self._price_sensors = price_sensors or []
+
+    def _source_entities(self) -> list[str]:
+        srcs: list[str] = []
+        for s in self._cumulative_metrics.values():
+            srcs += s._source_entities()
+        for s in self._price_sensors:
+            srcs += s._source_entities()
+        return list(set(srcs))
+
+    def _current_year_consumption(self) -> dict[str, float]:
+        """Current-year consumption deltas (lifetime − last close cumulative)."""
+        base = self._history.last_cumulative(self._utility)
+        out = {}
+        for k, s in self._cumulative_metrics.items():
+            lifetime = float(s.native_value or 0.0)
+            out[k] = max(0.0, lifetime - base.get(k, 0.0))
+        return out
+
+
+class ContractYearCurrentSensor(_YearHistoryBase):
+    """Cost accumulated in the *current* (in-progress) contract year (EUR).
+
+    Computed LIVE from current-year consumption × current price + elapsed-month
+    fixed cost — NOT as a lifetime-cost delta (which would drift as prices move
+    and re-price prior years). ``cost_fn`` takes the current-year consumption
+    dict and the months elapsed in the current year and returns EUR.
+    """
+
+    def __init__(self, hass, config, entry_id, throttle, *, utility, start,
+                 history, cumulative_metrics, cost_fn, name, uid, icon,
+                 price_sensors=None):
+        super().__init__(hass, config, entry_id, throttle,
+                         utility=utility, start=start, history=history,
+                         cumulative_metrics=cumulative_metrics,
+                         price_sensors=price_sensors)
+        self._cost_fn = cost_fn
+        self._attr_name = name
+        self._attr_unique_id = self._uid(uid)
+        self._attr_native_unit_of_measurement = CURRENCY_EURO
+        self._attr_device_class = SensorDeviceClass.MONETARY
+        self._attr_state_class = SensorStateClass.TOTAL
+        self._attr_icon = icon
+
+    def _months_into_current_year(self) -> float:
+        """Months elapsed since the current period actually began.
+
+        The current period begins where the *last close ended* (its
+        period_end), because consumption is measured by meter deltas captured at
+        that close. This keeps periods contiguous: if a period was closed early
+        (meter read before the anniversary), the days between the reading and the
+        anniversary fall into the new period rather than being dropped. With no
+        prior close, the period begins at the contract start date.
+        """
+        last_end = self._history.last_period_end(self._utility)
+        if last_end is not None:
+            year_start = last_end
+        else:
+            year_start = self._start
+        today = dt_util.now().date()
+        if today < year_start:
+            return 0.0
+        days = (today - year_start).days
+        return days / DEFAULT_DAYS_PER_MONTH
+
+    @property
+    def native_value(self) -> float:
+        cons = self._current_year_consumption()
+        months = self._months_into_current_year()
+        return round(max(0.0, self._cost_fn(cons, months)), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        idx = self._history.completed_year_count(self._utility) + 1
+        cons = self._current_year_consumption()
+        attrs = {
+            "contract_year": contract_year_label(self._start, idx),
+            "year_index": idx,
+            "completed_years_stored": self._history.completed_year_count(self._utility),
+        }
+        for k, v in cons.items():
+            attrs[f"current_year_{k}"] = round(v, 3)
+        return attrs
+
+
+class ContractYearHistorySensor(_YearHistoryBase):
+    """Diagnostic sensor exposing every *closed* contract year in attributes.
+
+    State = number of completed contract years on record.
+    """
+
+    _attr_state_class = None
+
+    def __init__(self, hass, config, entry_id, throttle, *, utility, start,
+                 history, cumulative_metrics, name: str, uid: str, icon: str):
+        super().__init__(hass, config, entry_id, throttle,
+                         utility=utility, start=start, history=history,
+                         cumulative_metrics=cumulative_metrics)
+        self._attr_name = name
+        self._attr_unique_id = self._uid(uid)
+        self._attr_icon = icon
+
+    @property
+    def native_value(self) -> int:
+        return self._history.completed_year_count(self._utility)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "contract_start": self._start.isoformat(),
+            "completed_years": self._history.completed_year_count(self._utility),
+            "current_year": contract_year_label(
+                self._start, self._history.completed_year_count(self._utility) + 1
+            ),
+            "years": self._history.closed_years(self._utility),
+        }
+
+
+class AccumulatedCostSensor(BelgiumEnergyCostSensor):
+    """True running cost (EUR), accumulated at the price each kWh was used.
+
+    On every consumption tick this adds ``Δkwh × current_price`` to a persisted
+    total via ``CostAccumulator`` — so, unlike the lifetime "total cost" sensor,
+    it does NOT re-price history when the ENGIE price moves. Accurate from the
+    moment it starts running (it seeds its baseline from the current reading).
+
+    ``streams`` maps a stable stream key → (consumption_sensor, price_sensor).
+    Multiple streams (e.g. peak + off-peak) sum into one accumulated total.
+    """
+
+    _attr_native_unit_of_measurement = CURRENCY_EURO
+    _attr_device_class = SensorDeviceClass.MONETARY
+    # HA requires monetary sensors to use TOTAL (or None), not TOTAL_INCREASING.
+    # The accumulated cost is a running total that only grows (re-seeding keeps
+    # the total, just rebases the meter delta), so TOTAL is the correct class.
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(self, hass, config, entry_id, throttle, *, accumulator,
+                 streams: dict, name: str, uid: str, icon: str):
+        super().__init__(hass, config, entry_id, throttle)
+        self._accumulator = accumulator
+        self._streams = streams  # key -> (consumption_sensor, price_sensor)
+        self._attr_name = name
+        self._attr_unique_id = self._uid(uid)
+        self._attr_icon = icon
+        self._unsub = None
+
+    def _source_entities(self) -> list[str]:
+        srcs: list[str] = []
+        for cons, _price in self._streams.values():
+            srcs += cons._source_entities()
+        return list(set(srcs))
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Drive ticks on consumption changes via our own subscription. We do the
+        # async accumulation here (not in native_value, which is sync), then
+        # write state so the new total shows. Seed once on startup too.
+        await self._tick_and_write()
+        srcs = self._source_entities()
+        if srcs:
+            self._unsub = async_track_state_change_event(
+                self.hass, srcs, self._on_consumption_change
+            )
+
+    async def async_will_remove_from_hass(self) -> None:
+        await super().async_will_remove_from_hass()
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _on_consumption_change(self, event) -> None:
+        self.hass.async_create_task(self._tick_and_write())
+
+    async def _tick_and_write(self) -> None:
+        for key, (cons, price) in self._streams.items():
+            kwh = cons.native_value
+            pr = price.native_value
+            if kwh is None or pr is None:
+                continue
+            try:
+                await self._accumulator.async_tick(key, float(kwh), float(pr))
+            except Exception:  # noqa: BLE001 - never let a tick break state writes
+                _LOGGER.exception("cost accumulator tick failed for stream '%s'", key)
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float:
+        return round(sum(self._accumulator.running_cost(k) for k in self._streams), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "note": "Accurate running cost — each kWh priced when consumed. "
+                    "Accurate from when this sensor started; not retroactive.",
+            **{f"{k}_eur": round(self._accumulator.running_cost(k), 2) for k in self._streams},
+        }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: config_entries.ConfigEntry,
@@ -1408,5 +1639,165 @@ async def async_setup_entry(
         total_annual,
         TotalAverageMonthlyEnergyCostSensor(hass, conf, entry_id, throttle, total_energy),
     ]
+
+    # --- Per-contract-year history (ADDITIVE & FAIL-SAFE) -------------------
+    # Wrapped so that any failure here can never prevent the core sensors above
+    # from loading. Worst case: the year-history sensors are simply absent.
+    #
+    # KEY MODEL: per-year COST is computed from that year's own consumption ×
+    # current price + elapsed-month fixed cost — NOT a lifetime-cost delta
+    # (lifetime cost re-prices all history at the current price, so deltas drift
+    # and would re-cost prior years whenever the ENGIE price moves). Closed-year
+    # cost is FROZEN at close via the same cost function and never recomputed.
+    try:
+        history = ContractYearHistory(hass, entry_id)
+        await history.async_load()
+
+        # Cumulative (stable) consumption metrics — deltas give per-year usage.
+        elec_metrics: dict[str, BelgiumEnergyCostSensor] = {}
+        if meter_type == METER_TYPE_BI_HORAIRE:
+            elec_metrics["peak_kwh"] = peak_con
+            elec_metrics["offpeak_kwh"] = offpeak_con
+        else:
+            elec_metrics["kwh"] = single_con
+
+        # Cost function: current-year electricity cost from consumption + months.
+        def _elec_cost_fn(cons: dict, months: float) -> float:
+            fixed = months * elec_costs[COST_FIXED_MONTHLY]
+            if meter_type == METER_TYPE_BI_HORAIRE:
+                energy = (
+                    cons.get("peak_kwh", 0.0) * (peak_price.native_value or 0.0)
+                    + cons.get("offpeak_kwh", 0.0) * (offpeak_price.native_value or 0.0)
+                )
+            else:
+                energy = cons.get("kwh", 0.0) * (single_price.native_value or 0.0)
+            return energy + fixed
+
+        # Price sensors the elec cost depends on — current cost must refresh
+        # when these change, not only on a P1 consumption tick.
+        _elec_price_sensors = (
+            [peak_price, offpeak_price] if meter_type == METER_TYPE_BI_HORAIRE
+            else [single_price]
+        )
+
+        elec_start: date = conf[CONF_ELECTRICITY][CONF_CONTRACT_START_DATE]
+        sensors += [
+            ContractYearCurrentSensor(
+                hass, conf, entry_id, throttle,
+                utility=UTILITY_ELEC, start=elec_start, history=history,
+                cumulative_metrics=elec_metrics, cost_fn=_elec_cost_fn,
+                price_sensors=_elec_price_sensors,
+                name="Electricity Cost This Billing Period",
+                uid="electricity_cost_current_contract_year",
+                icon="mdi:calendar-clock",
+            ),
+            ContractYearHistorySensor(
+                hass, conf, entry_id, throttle,
+                utility=UTILITY_ELEC, start=elec_start, history=history,
+                cumulative_metrics=elec_metrics,
+                name="Electricity Billing Period History",
+                uid="electricity_contract_year_history",
+                icon="mdi:history",
+            ),
+        ]
+
+        # Defaults so the stash references below are always bound even when gas
+        # is not configured. (_gas_cost_fn is redefined as a real function inside
+        # the guard — the None default is intentional, not dead code.)
+        gas_metrics = None
+        _gas_cost_fn = None
+        gas_start = None
+        if has_gas and gas_total is not None:
+            gas_metrics = {"kwh": gas_con_kwh, "m3": gas_con_m3}
+
+            def _gas_cost_fn(cons: dict, months: float) -> float:
+                fixed = months * gas_costs[COST_GAS_FIXED_MONTHLY]
+                energy = cons.get("kwh", 0.0) * (gas_price_kwh.native_value or 0.0)
+                return energy + fixed
+
+            gas_start = conf[CONF_GAS].get(CONF_CONTRACT_START_DATE, elec_start)
+            sensors += [
+                ContractYearCurrentSensor(
+                    hass, conf, entry_id, throttle,
+                    utility=UTILITY_GAS, start=gas_start, history=history,
+                    cumulative_metrics=gas_metrics, cost_fn=_gas_cost_fn,
+                    price_sensors=[gas_price_kwh],
+                    name="Gas Cost This Billing Period",
+                    uid="gas_cost_current_contract_year",
+                    icon="mdi:calendar-clock",
+                ),
+                ContractYearHistorySensor(
+                    hass, conf, entry_id, throttle,
+                    utility=UTILITY_GAS, start=gas_start, history=history,
+                    cumulative_metrics=gas_metrics,
+                    name="Gas Billing Period History",
+                    uid="gas_contract_year_history",
+                    icon="mdi:history",
+                ),
+            ]
+
+        # Stash for the close/undo services (registered in __init__.py).
+        # Each utility provides: start date, cumulative metrics (for the
+        # lifetime values + per-year deltas), and a cost_fn to FREEZE the
+        # year's cost at close.
+        store = hass.data.setdefault(DOMAIN, {}).setdefault("_year_history", {})
+        store[entry_id] = {
+            "history": history,
+            "elec": {"start": elec_start, "metrics": elec_metrics, "cost_fn": _elec_cost_fn},
+        }
+        if has_gas and gas_total is not None:
+            store[entry_id]["gas"] = {
+                "start": gas_start, "metrics": gas_metrics, "cost_fn": _gas_cost_fn,
+            }
+    except Exception:  # noqa: BLE001 - never let history break core sensors
+        _LOGGER.exception(
+            "Belgium Energy Costs: per-contract-year history failed to initialise; "
+            "core sensors are unaffected"
+        )
+
+    # --- Continuous cost accumulator (ADDITIVE & FAIL-SAFE) -----------------
+    # True running cost: each kWh priced when consumed (no re-pricing drift).
+    # Accurate from first run; seeds its baseline from the current reading.
+    try:
+        from .cost_accumulator import CostAccumulator
+
+        accumulator = CostAccumulator(hass, entry_id)
+        await accumulator.async_load()
+
+        # Electricity streams: (consumption_sensor, price_sensor) per tariff.
+        if meter_type == METER_TYPE_BI_HORAIRE:
+            elec_streams = {
+                "elec_peak": (peak_con, peak_price),
+                "elec_offpeak": (offpeak_con, offpeak_price),
+            }
+        else:
+            elec_streams = {"elec": (single_con, single_price)}
+
+        sensors.append(
+            AccumulatedCostSensor(
+                hass, conf, entry_id, throttle,
+                accumulator=accumulator, streams=elec_streams,
+                name="Electricity Cost Accumulated",
+                uid="electricity_cost_accumulated",
+                icon="mdi:cash-clock",
+            )
+        )
+
+        if has_gas and gas_total is not None:
+            gas_streams = {"gas": (gas_con_kwh, gas_price_kwh)}
+            sensors.append(
+                AccumulatedCostSensor(
+                    hass, conf, entry_id, throttle,
+                    accumulator=accumulator, streams=gas_streams,
+                    name="Gas Cost Accumulated",
+                    uid="gas_cost_accumulated",
+                    icon="mdi:cash-clock",
+                )
+            )
+    except Exception:  # noqa: BLE001 - never let the accumulator break core sensors
+        _LOGGER.exception(
+            "Belgium Energy Costs: cost accumulator failed to initialise; "
+            "core sensors are unaffected"
+        )
 
     async_add_entities(sensors, update_before_add=True)

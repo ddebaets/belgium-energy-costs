@@ -802,7 +802,11 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
             step_id="gas_conversion",
             data_schema=vol.Schema({
                 vol.Required(CONF_CONVERSION_FACTOR, default=current): NumberSelector(
-                    NumberSelectorConfig(min=8, max=14, step=0.0001,
+                    # step="any" avoids HA's float step-validation rejecting
+                    # fine-grained values (e.g. 11.3876) — a fixed small step
+                    # like 0.0001 fails because (value-min)/step isn't exactly
+                    # integral in floating point.
+                    NumberSelectorConfig(min=8, max=14, step="any",
                                         mode=NumberSelectorMode.BOX,
                                         unit_of_measurement="kWh/m³")
                 ),

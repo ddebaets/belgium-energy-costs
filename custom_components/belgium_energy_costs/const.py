@@ -121,3 +121,12 @@ def get_gas_meter_entity_id(entry_id: str) -> str:
     case-insensitive so this is safe.
     """
     return f"number.{DOMAIN}_{entry_id.lower()}_gas_meter_reading"
+
+
+def get_close_date_entity_id(entry_id: str, utility: str) -> str:
+    """Return the contract-year close-date date entity_id for a utility.
+
+    *utility* is "elec" or "gas". Used by the dashboard date picker and read
+    by the close service when no explicit period_end is supplied.
+    """
+    return f"date.{DOMAIN}_{entry_id.lower()}_{utility}_close_date"
