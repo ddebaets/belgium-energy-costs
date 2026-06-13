@@ -12,17 +12,19 @@ A Home Assistant custom integration that tracks **real-time total energy costs**
 - 📈 **Monthly averages & annual projections** — extrapolated from actual consumption
 - 🔄 **Event-driven, not polled** — sensors update instantly when P1 meter or ENGIE prices change
 - ⚡ **Debounced batch updates** — rapid P1 meter ticks are absorbed and flushed as a single batch (5 s window), reducing HA event-loop pressure
-- 🌍 **Multi-region** — Brussels (fully supported), Flanders and Wallonia (community contributions welcome)
+- 🌍 **Multi-region** — Brussels & Wallonia supported; Flanders coming soon (community contributions welcome)
 
 ## Supported Regions
 
 | Region | Grid Operator | Status | Gas Conversion |
 |--------|---------------|--------|----------------|
 | 🟢 **Brussels** | SIBELGA | ✅ Fully Supported | 11.39 kWh/m³ |
+| 🟢 **Wallonia** | ORES (default), RESA, AIEG, AIESH, Régie de Wavre | ✅ Supported — ORES defaults | ~11.0 kWh/m³ \* |
 | 🟡 **Flanders** | Fluvius | ⚠️ Coming Soon | ~11.0 kWh/m³ |
-| 🟡 **Wallonia** | ORES/RESA/AIEG/AIESH | ⚠️ Coming Soon | ~11.0 kWh/m³ |
 
-> **Help wanted!** If you're in Flanders or Wallonia, please [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details (fixed electricity and gas costs) so we can add verified defaults for your region.
+> **Wallonia** ships with **ORES** defaults (the largest DSO, ~75% of Wallonia). On another DSO (RESA, AIEG, AIESH, Régie de Wavre)? All grid-cost values are editable during setup — the per-DSO figures are listed in `const.py`.
+>
+> \* The gas m³→kWh conversion is a placeholder — calibrate it from a real bill (Brussels is calibrated to 11.39). **Flanders** help still welcome — [open an issue](https://github.com/ddebaets/belgium-energy-costs/issues) with your ENGIE contract details.
 
 ## Prerequisites
 

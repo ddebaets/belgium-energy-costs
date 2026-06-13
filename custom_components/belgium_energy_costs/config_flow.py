@@ -47,6 +47,7 @@ from .const import (
     REGION_FLANDERS,
     REGION_WALLONIA,
     REGIONAL_DEFAULTS,
+    REGION_COST_DEFAULTS,
     SENSOR_TOTAL,
     SENSOR_PEAK,
     SENSOR_OFFPEAK,
@@ -394,24 +395,26 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_gas_config()
 
         meter_type = self.config_data[CONF_METER_TYPE]
+        region = self.config_data.get(CONF_REGION, REGION_BRUSSELS)
+        d = REGION_COST_DEFAULTS.get(region, REGION_COST_DEFAULTS[REGION_BRUSSELS])["elec"]
         if meter_type == METER_TYPE_BI_HORAIRE:
             schema = vol.Schema({
-                vol.Required(COST_GREEN_CERT, default=0.0275): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_DIST_PEAK, default=0.0941): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_DIST_OFFPEAK, default=0.0706): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_TRANSMISSION, default=0.0225): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_COTISATION, default=0.00204): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_ACCISE, default=0.05033): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_FIXED_MONTHLY, default=14.05): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GREEN_CERT, default=d[COST_GREEN_CERT]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_DIST_PEAK, default=d[COST_DIST_PEAK]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_DIST_OFFPEAK, default=d[COST_DIST_OFFPEAK]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_TRANSMISSION, default=d[COST_TRANSMISSION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_COTISATION, default=d[COST_COTISATION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_ACCISE, default=d[COST_ACCISE]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_FIXED_MONTHLY, default=d[COST_FIXED_MONTHLY]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             })
         else:
             schema = vol.Schema({
-                vol.Required(COST_GREEN_CERT, default=0.0275): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_DIST_SINGLE, default=0.0823): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_TRANSMISSION, default=0.0225): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_COTISATION, default=0.00204): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_ACCISE, default=0.05033): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_FIXED_MONTHLY, default=14.05): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GREEN_CERT, default=d[COST_GREEN_CERT]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_DIST_SINGLE, default=d[COST_DIST_SINGLE]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_TRANSMISSION, default=d[COST_TRANSMISSION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_COTISATION, default=d[COST_COTISATION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_ACCISE, default=d[COST_ACCISE]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_FIXED_MONTHLY, default=d[COST_FIXED_MONTHLY]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             })
 
         return self.async_show_form(
@@ -498,14 +501,16 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.config_data["gas_costs"] = user_input
             return await self._async_create_entry()
 
+        region = self.config_data.get(CONF_REGION, REGION_BRUSSELS)
+        g = REGION_COST_DEFAULTS.get(region, REGION_COST_DEFAULTS[REGION_BRUSSELS])["gas"]
         return self.async_show_form(
             step_id="gas_costs",
             data_schema=vol.Schema({
-                vol.Required(COST_GAS_DISTRIBUTION, default=0.01949): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_TRANSMISSION, default=0.00165): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_COTISATION, default=0.00106): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_ACCISE, default=0.00872): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_FIXED_MONTHLY, default=7.57): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_DISTRIBUTION, default=g[COST_GAS_DISTRIBUTION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_TRANSMISSION, default=g[COST_GAS_TRANSMISSION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_COTISATION, default=g[COST_GAS_COTISATION]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_ACCISE, default=g[COST_GAS_ACCISE]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_FIXED_MONTHLY, default=g[COST_GAS_FIXED_MONTHLY]): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             }),
             description_placeholders={
                 "note": _step_note(
@@ -690,25 +695,27 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
 
         current = self.config_entry.data[CONF_ELECTRICITY][CONF_COSTS]
         meter_type = self.config_entry.data[CONF_ELECTRICITY][CONF_METER_TYPE]
+        region = self.config_entry.data.get(CONF_REGION, REGION_BRUSSELS)
+        d = REGION_COST_DEFAULTS.get(region, REGION_COST_DEFAULTS[REGION_BRUSSELS])["elec"]
 
         if meter_type == METER_TYPE_BI_HORAIRE:
             schema = vol.Schema({
-                vol.Required(COST_GREEN_CERT, default=current.get(COST_GREEN_CERT, 0.0275)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_DIST_PEAK, default=current.get(COST_DIST_PEAK, 0.0941)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_DIST_OFFPEAK, default=current.get(COST_DIST_OFFPEAK, 0.0706)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_TRANSMISSION, default=current.get(COST_TRANSMISSION, 0.0225)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_COTISATION, default=current.get(COST_COTISATION, 0.00204)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_ACCISE, default=current.get(COST_ACCISE, 0.05033)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_FIXED_MONTHLY, default=current.get(COST_FIXED_MONTHLY, 14.05)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GREEN_CERT, default=current.get(COST_GREEN_CERT, d[COST_GREEN_CERT])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_DIST_PEAK, default=current.get(COST_DIST_PEAK, d[COST_DIST_PEAK])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_DIST_OFFPEAK, default=current.get(COST_DIST_OFFPEAK, d[COST_DIST_OFFPEAK])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_TRANSMISSION, default=current.get(COST_TRANSMISSION, d[COST_TRANSMISSION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_COTISATION, default=current.get(COST_COTISATION, d[COST_COTISATION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_ACCISE, default=current.get(COST_ACCISE, d[COST_ACCISE])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_FIXED_MONTHLY, default=current.get(COST_FIXED_MONTHLY, d[COST_FIXED_MONTHLY])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             })
         else:
             schema = vol.Schema({
-                vol.Required(COST_GREEN_CERT, default=current.get(COST_GREEN_CERT, 0.0275)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_DIST_SINGLE, default=current.get(COST_DIST_SINGLE, 0.0823)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_TRANSMISSION, default=current.get(COST_TRANSMISSION, 0.0225)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_COTISATION, default=current.get(COST_COTISATION, 0.00204)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_ACCISE, default=current.get(COST_ACCISE, 0.05033)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_FIXED_MONTHLY, default=current.get(COST_FIXED_MONTHLY, 14.05)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GREEN_CERT, default=current.get(COST_GREEN_CERT, d[COST_GREEN_CERT])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_DIST_SINGLE, default=current.get(COST_DIST_SINGLE, d[COST_DIST_SINGLE])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_TRANSMISSION, default=current.get(COST_TRANSMISSION, d[COST_TRANSMISSION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_COTISATION, default=current.get(COST_COTISATION, d[COST_COTISATION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_ACCISE, default=current.get(COST_ACCISE, d[COST_ACCISE])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_FIXED_MONTHLY, default=current.get(COST_FIXED_MONTHLY, d[COST_FIXED_MONTHLY])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             })
 
         return self.async_show_form(
@@ -731,14 +738,16 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data={})
 
         current = self.config_entry.data[CONF_GAS][CONF_COSTS]
+        region = self.config_entry.data.get(CONF_REGION, REGION_BRUSSELS)
+        g = REGION_COST_DEFAULTS.get(region, REGION_COST_DEFAULTS[REGION_BRUSSELS])["gas"]
         return self.async_show_form(
             step_id="gas_costs",
             data_schema=vol.Schema({
-                vol.Required(COST_GAS_DISTRIBUTION, default=current.get(COST_GAS_DISTRIBUTION, 0.01949)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_TRANSMISSION, default=current.get(COST_GAS_TRANSMISSION, 0.00165)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_COTISATION, default=current.get(COST_GAS_COTISATION, 0.00106)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_ACCISE, default=current.get(COST_GAS_ACCISE, 0.00872)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
-                vol.Required(COST_GAS_FIXED_MONTHLY, default=current.get(COST_GAS_FIXED_MONTHLY, 7.57)): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_DISTRIBUTION, default=current.get(COST_GAS_DISTRIBUTION, g[COST_GAS_DISTRIBUTION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_TRANSMISSION, default=current.get(COST_GAS_TRANSMISSION, g[COST_GAS_TRANSMISSION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_COTISATION, default=current.get(COST_GAS_COTISATION, g[COST_GAS_COTISATION])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_ACCISE, default=current.get(COST_GAS_ACCISE, g[COST_GAS_ACCISE])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
+                vol.Required(COST_GAS_FIXED_MONTHLY, default=current.get(COST_GAS_FIXED_MONTHLY, g[COST_GAS_FIXED_MONTHLY])): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX)),
             }),
             description_placeholders={"note": "Update values from your new ENGIE contract."},
         )

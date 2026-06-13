@@ -41,10 +41,11 @@ REGIONAL_DEFAULTS = {
     },
     REGION_WALLONIA: {
         "name": "Wallonia",
-        "grid_operator": "ORES/RESA/AIEG/AIESH",
-        "gas_conversion": 11.0,  # Average - needs community verification
-        "supported": False,
-        "description": "Walloon Region (ORES, RESA, AIEG, AIESH, REW)",
+        "grid_operator": "ORES (default) / RESA / AIEG / AIESH / Régie de Wavre",
+        # ORES default; calibrate from a real Walloon bill like Brussels (11.39).
+        "gas_conversion": 11.0,
+        "supported": True,
+        "description": "Walloon Region — defaults from ORES (largest DSO); other DSOs adjustable in setup",
     },
 }
 
@@ -77,6 +78,58 @@ COST_GAS_FIXED_MONTHLY = "fixed_monthly"
 # Default values
 DEFAULT_GAS_CONVERSION = 11.39  # kWh/m³ for Brussels/SIBELGA (calibrated from a full annual bill)
 DEFAULT_DAYS_PER_MONTH = 30.44
+
+# Per-region default cost components (EUR/kWh, except *_fixed_monthly in EUR/month).
+# These pre-fill the setup flow; every value remains editable per user/contract/DSO.
+# Brussels = SIBELGA (the original calibrated set). Wallonia = ORES (the largest DSO,
+# ~75% of Wallonia), sourced from the ENGIE Wallonia "prices & conditions" sheets.
+# Any region without an entry falls back to Brussels.
+#
+# Other Walloon DSO electricity distribution (c€/kWh — peak / off-peak / single / terme-fixe €/yr):
+#   AIEG          12.05 / 6.66 / 10.87 / 19.49     AIESH  15.17 / 8.21 / 13.64 / 17.92
+#   TECTEO-RESA   12.20 / 7.01 / 11.06 / 26.50     Régie de Wavre 13.78 / 7.84 / 12.48 / 26.44
+# Other Walloon DSO gas distribution (Moyenne tier — proportional c€/kWh / terme-fixe €/yr):
+#   TECTEO-RESA   2.529 / 122.05   (ORES: 2.206 / 140.93)
+REGION_COST_DEFAULTS = {
+    REGION_BRUSSELS: {
+        "elec": {
+            COST_GREEN_CERT: 0.0275,
+            COST_DIST_PEAK: 0.0941,
+            COST_DIST_OFFPEAK: 0.0706,
+            COST_DIST_SINGLE: 0.0823,
+            COST_TRANSMISSION: 0.0225,
+            COST_COTISATION: 0.00204,
+            COST_ACCISE: 0.05033,
+            COST_FIXED_MONTHLY: 14.05,
+        },
+        "gas": {
+            COST_GAS_DISTRIBUTION: 0.01949,
+            COST_GAS_TRANSMISSION: 0.00165,
+            COST_GAS_COTISATION: 0.00106,
+            COST_GAS_ACCISE: 0.00872,
+            COST_GAS_FIXED_MONTHLY: 7.57,
+        },
+    },
+    REGION_WALLONIA: {  # ORES (largest Walloon DSO); from ENGIE Wallonia price sheets
+        "elec": {
+            COST_GREEN_CERT: 0.03095,      # "coûts énergie verte" 3.095 c€/kWh
+            COST_DIST_PEAK: 0.1327,        # distribution heures pleines
+            COST_DIST_OFFPEAK: 0.0739,     # distribution heures creuses
+            COST_DIST_SINGLE: 0.1198,      # distribution normal (single tariff)
+            COST_TRANSMISSION: 0.0274,     # transport
+            COST_COTISATION: 0.00204,      # cotisation fédérale (national)
+            COST_ACCISE: 0.05033,          # accise fédérale 0-20,000 kWh (national)
+            COST_FIXED_MONTHLY: 6.93,      # ORES terme fixe 14.10/yr + ENGIE redevance 69/yr, /12
+        },
+        "gas": {
+            COST_GAS_DISTRIBUTION: 0.02206,    # ORES "Moyenne" tier (5,001-150,000 kWh/yr)
+            COST_GAS_TRANSMISSION: 0.00165,    # transport 0.165 c€/kWh
+            COST_GAS_COTISATION: 0.00106,
+            COST_GAS_ACCISE: 0.00872,          # accise 0-12,000 kWh
+            COST_GAS_FIXED_MONTHLY: 16.74,     # ORES gas terme fixe 140.93/yr + ENGIE 60/yr, /12
+        },
+    },
+}
 
 # Config keys for user-selected ENGIE sensor entity IDs
 # These are stored in the config entry and passed to sensors at runtime.
