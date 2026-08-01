@@ -93,6 +93,10 @@ views:
                 name: Avg monthly cost
               - entity: sensor.total_estimated_annual_energy_cost
                 name: Estimated annual total
+              # Seasonal projection of the CURRENT billing year (solar-aware,
+              # net of projected injection revenue) — see v5.11.0 changelog.
+              - entity: sensor.total_projected_year_end_cost
+                name: Projected year-end total (net)
           - type: energy-distribution
             link_dashboard: true
 

@@ -52,7 +52,8 @@
         "data": {
           "has_solar": "I have solar panels with grid injection",
           "export_sensor": "Export (injection) sensor",
-          "export_baseline": "Export baseline at contract start (kWh)"
+          "export_baseline": "Export baseline at contract start (kWh)",
+          "pv_annual_generation_kwh": "Estimated annual PV generation (kWh/year, 0 = unknown)"
         }
       },
       "electricity_costs": {
@@ -112,7 +113,8 @@
           "electricity_costs": "⚡ Update Electricity Costs",
           "gas_costs": "🔥 Update Gas Costs",
           "gas_reading": "🔢 Update Gas Meter Reading",
-          "gas_conversion": "📐 Update Gas Conversion Factor"
+          "gas_conversion": "📐 Update Gas Conversion Factor",
+          "solar_export": "☀️ Solar / Injection Tracking"
         }
       },
       "engie_sensors": {
@@ -162,6 +164,16 @@
         "description": "{note}",
         "data": {
           "conversion_factor": "Gas conversion factor (kWh/m³)"
+        }
+      },
+      "solar_export": {
+        "title": "☀️ Solar / Injection Tracking",
+        "description": "{note}",
+        "data": {
+          "has_solar": "I have solar panels (track export / injection)",
+          "export_sensor": "P1 export (injection) sensor",
+          "export_baseline": "Export baseline at installation (kWh)",
+          "pv_annual_generation_kwh": "Estimated annual PV generation (kWh/year, 0 = unknown)"
         }
       }
     },

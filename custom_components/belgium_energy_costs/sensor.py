@@ -50,7 +50,14 @@ from .contract_year import (
     ContractYearHistory,
     UTILITY_ELEC,
     UTILITY_GAS,
+    _safe_anniversary,
     contract_year_label,
+)
+from .projection import (
+    BATTERY_EFF,
+    SELF_USE_CAP,
+    project_electricity_year,
+    project_gas_year,
 )
 from homeassistant.util import dt as dt_util
 
@@ -110,6 +117,10 @@ from .const import (
     SENSOR_GAS_ANNUAL_COST,
     SENSOR_TOTAL_ENERGY_COST,
     SENSOR_TOTAL_ANNUAL_COST,
+    SENSOR_ELEC_PROJECTED_YEAR,
+    SENSOR_GAS_PROJECTED_YEAR,
+    SENSOR_TOTAL_PROJECTED_YEAR,
+    CONF_PV_ANNUAL_KWH,
     get_gas_meter_entity_id,
 )
 
@@ -156,6 +167,10 @@ class _UpdateThrottle:
     ) -> None:
         """Register *sensor* as a listener for each of *source_entities*."""
         for entity_id in source_entities:
+            # Optional sources (e.g. an unset ENGIE injection sensor) come
+            # through as "" — nothing to subscribe to.
+            if not entity_id:
+                continue
             if entity_id not in self._listeners:
                 self._listeners[entity_id] = set()
                 self._unsubs[entity_id] = async_track_state_change_event(
@@ -1435,6 +1450,257 @@ class ContractYearHistorySensor(_YearHistoryBase):
         }
 
 
+class _ProjectedYearBase(_YearHistoryBase):
+    """Shared logic for the seasonal billing-year projection sensors.
+
+    State = projected total cost of the CURRENT billing year:
+    the frozen actual cost so far (from the ContractYearCurrentSensor) plus a
+    month-by-month seasonal model of the remaining months (see projection.py).
+    Anchored on the last *closed* year's consumption; falls back to the
+    annualised lifetime average while still inside the first year.
+    """
+
+    _attr_native_unit_of_measurement = CURRENCY_EURO
+    _attr_device_class = SensorDeviceClass.MONETARY
+
+    def __init__(self, hass, config, entry_id, throttle, *, utility, start,
+                 history, cumulative_metrics, current_sensor, price_sensors,
+                 name, uid, icon):
+        super().__init__(hass, config, entry_id, throttle,
+                         utility=utility, start=start, history=history,
+                         cumulative_metrics=cumulative_metrics,
+                         price_sensors=price_sensors)
+        self._current_sensor = current_sensor
+        self._attr_name = name
+        self._attr_unique_id = self._uid(uid)
+        self._attr_icon = icon
+
+    def _period_bounds(self) -> tuple[date, date, date]:
+        """(today, period_start, period_end) of the current billing year."""
+        today = dt_util.now().date()
+        period_start = self._history.last_period_end(self._utility) or self._start
+        idx = self._history.completed_year_count(self._utility) + 1
+        period_end = _safe_anniversary(self._start, self._start.year + idx)
+        # An early close can leave the anniversary before the period start;
+        # fall back to a plain one-year period so the window is never empty.
+        if period_end <= period_start:
+            period_end = _safe_anniversary(period_start, period_start.year + 1)
+        return today, period_start, period_end
+
+    def _last_year_totals(self) -> dict[str, float] | None:
+        years = self._history.closed_years(self._utility)
+        return years[-1]["totals"] if years else None
+
+    def _annualized_lifetime(self, keys: tuple[str, ...]) -> float:
+        months = self._calculate_months_since_start()
+        if months <= 0:
+            return 0.0
+        total = sum(float(self._cumulative_metrics[k].native_value or 0.0)
+                    for k in keys if k in self._cumulative_metrics)
+        return total / months * 12
+
+
+class ElectricityProjectedYearEndCostSensor(_ProjectedYearBase):
+    """Solar-aware projected electricity cost for the current billing year."""
+
+    def __init__(self, hass, config, entry_id, throttle, *, start, history,
+                 cumulative_metrics, current_sensor, meter_type, costs,
+                 peak_price, offpeak_price, single_price, inj_price):
+        price_sensors = ([peak_price, offpeak_price]
+                         if meter_type == METER_TYPE_BI_HORAIRE else [single_price])
+        if inj_price:
+            price_sensors = price_sensors + [inj_price]
+        super().__init__(hass, config, entry_id, throttle,
+                         utility=UTILITY_ELEC, start=start, history=history,
+                         cumulative_metrics=cumulative_metrics,
+                         current_sensor=current_sensor,
+                         price_sensors=price_sensors,
+                         name="Electricity Projected Year-End Cost",
+                         uid=SENSOR_ELEC_PROJECTED_YEAR,
+                         icon="mdi:chart-timeline-variant")
+        self._meter_type = meter_type
+        self._costs = costs
+        self._peak_price = peak_price
+        self._offpeak_price = offpeak_price
+        self._single_price = single_price
+        self._inj_price = inj_price
+
+    def _pv_annual(self) -> float:
+        export_conf = self._config.get(CONF_ELECTRICITY, {}).get(CONF_EXPORT, {})
+        try:
+            return float(export_conf.get(CONF_PV_ANNUAL_KWH, 0) or 0)
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _project(self) -> dict[str, Any]:
+        today, period_start, period_end = self._period_bounds()
+        totals = self._last_year_totals()
+        if self._meter_type == METER_TYPE_BI_HORAIRE:
+            if totals:
+                peak = totals.get("peak_kwh", 0.0)
+                off = totals.get("offpeak_kwh", 0.0)
+            else:
+                peak = float(self._cumulative_metrics["peak_kwh"].native_value or 0.0)
+                off = float(self._cumulative_metrics["offpeak_kwh"].native_value or 0.0)
+            annual_load = ((peak + off) if totals
+                           else self._annualized_lifetime(("peak_kwh", "offpeak_kwh")))
+            peak_share = peak / (peak + off) if (peak + off) > 0 else 0.5
+            peak_price = self._peak_price.native_value or 0.0
+            offpeak_price = self._offpeak_price.native_value or 0.0
+        else:
+            annual_load = (totals.get("kwh", 0.0) if totals
+                           else self._annualized_lifetime(("kwh",)))
+            peak_share = 1.0
+            peak_price = offpeak_price = self._single_price.native_value or 0.0
+
+        result = project_electricity_year(
+            today=today,
+            period_start=period_start,
+            period_end=period_end,
+            annual_load_kwh=annual_load,
+            annual_pv_kwh=self._pv_annual(),
+            peak_share=peak_share,
+            peak_price=peak_price,
+            offpeak_price=offpeak_price,
+            fixed_monthly=self._costs[COST_FIXED_MONTHLY],
+            injection_price=(self._inj_price.native_value or 0.0) if self._inj_price else 0.0,
+            cost_so_far=float(self._current_sensor.native_value or 0.0),
+        )
+        result["period_start"] = period_start.isoformat()
+        result["period_end"] = period_end.isoformat()
+        result["annual_load_anchor_kwh"] = round(annual_load, 0)
+        return result
+
+    @property
+    def native_value(self) -> float:
+        return round(self._project()["projected_cost"], 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        p = self._project()
+        return {
+            "period_start": p["period_start"],
+            "period_end": p["period_end"],
+            "cost_so_far": p["cost_so_far"],
+            "remaining_modelled_cost": p["remaining_modelled_cost"],
+            "remaining_modelled_import_kwh": p["remaining_modelled_import_kwh"],
+            "annual_load_anchor_kwh": p["annual_load_anchor_kwh"],
+            "annual_pv_estimate_kwh": self._pv_annual(),
+            "projected_year_export_kwh": p["projected_year_export_kwh"],
+            "projected_year_injection_revenue": p["projected_year_injection_revenue"],
+            "model": (
+                f"seasonal load/PV shapes (Synergrid RLP, PVGIS Brussels); "
+                f"self-use cap {SELF_USE_CAP}, battery efficiency {BATTERY_EFF}"
+            ),
+            "months": p["months"],
+        }
+
+
+class GasProjectedYearEndCostSensor(_ProjectedYearBase):
+    """Projected gas cost for the current billing year (heating-shaped)."""
+
+    def __init__(self, hass, config, entry_id, throttle, *, start, history,
+                 cumulative_metrics, current_sensor, costs, gas_price_kwh):
+        super().__init__(hass, config, entry_id, throttle,
+                         utility=UTILITY_GAS, start=start, history=history,
+                         cumulative_metrics=cumulative_metrics,
+                         current_sensor=current_sensor,
+                         price_sensors=[gas_price_kwh],
+                         name="Gas Projected Year-End Cost",
+                         uid=SENSOR_GAS_PROJECTED_YEAR,
+                         icon="mdi:chart-timeline-variant")
+        self._costs = costs
+        self._gas_price_kwh = gas_price_kwh
+
+    def _project(self) -> dict[str, Any]:
+        today, period_start, period_end = self._period_bounds()
+        totals = self._last_year_totals()
+        annual_load = (totals.get("kwh", 0.0) if totals
+                       else self._annualized_lifetime(("kwh",)))
+        result = project_gas_year(
+            today=today,
+            period_start=period_start,
+            period_end=period_end,
+            annual_load_kwh=annual_load,
+            price_per_kwh=self._gas_price_kwh.native_value or 0.0,
+            fixed_monthly=self._costs[COST_GAS_FIXED_MONTHLY],
+            cost_so_far=float(self._current_sensor.native_value or 0.0),
+        )
+        result["period_start"] = period_start.isoformat()
+        result["period_end"] = period_end.isoformat()
+        result["annual_load_anchor_kwh"] = round(annual_load, 0)
+        return result
+
+    @property
+    def native_value(self) -> float:
+        return round(self._project()["projected_cost"], 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        p = self._project()
+        return {
+            "period_start": p["period_start"],
+            "period_end": p["period_end"],
+            "cost_so_far": p["cost_so_far"],
+            "remaining_modelled_cost": p["remaining_modelled_cost"],
+            "remaining_modelled_kwh": p["remaining_modelled_kwh"],
+            "annual_load_anchor_kwh": p["annual_load_anchor_kwh"],
+            "model": "seasonal heating shape (Belgian residential gas profile)",
+            "months": p["months"],
+        }
+
+
+class TotalProjectedYearEndCostSensor(BelgiumEnergyCostSensor):
+    """Net projected cost of the current billing year: elec + gas − injection."""
+
+    _attr_native_unit_of_measurement = CURRENCY_EURO
+    _attr_device_class = SensorDeviceClass.MONETARY
+
+    def __init__(self, hass, config, entry_id, throttle,
+                 elec_proj: ElectricityProjectedYearEndCostSensor,
+                 gas_proj: GasProjectedYearEndCostSensor | None):
+        super().__init__(hass, config, entry_id, throttle)
+        self._elec_proj = elec_proj
+        self._gas_proj = gas_proj
+        self._attr_name = "Total Projected Year-End Cost"
+        self._attr_unique_id = self._uid(SENSOR_TOTAL_PROJECTED_YEAR)
+        self._attr_icon = "mdi:chart-timeline-variant-shimmer"
+
+    def _source_entities(self) -> list[str]:
+        srcs = list(self._elec_proj._source_entities())
+        if self._gas_proj:
+            srcs += self._gas_proj._source_entities()
+        return list(set(srcs))
+
+    @property
+    def native_value(self) -> float:
+        elec = self._elec_proj._project()
+        gas = self._gas_proj._project() if self._gas_proj else None
+        net = (elec["projected_cost"]
+               + (gas["projected_cost"] if gas else 0.0)
+               - elec["projected_year_injection_revenue"])
+        return round(net, 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        elec = self._elec_proj._project()
+        gas = self._gas_proj._project() if self._gas_proj else None
+        attrs: dict[str, Any] = {
+            "electricity_projected": elec["projected_cost"],
+            "projected_injection_revenue": elec["projected_year_injection_revenue"],
+        }
+        if gas:
+            attrs["gas_projected"] = gas["projected_cost"]
+        attrs["gross_projected"] = round(
+            elec["projected_cost"] + (gas["projected_cost"] if gas else 0.0), 2
+        )
+        attrs["note"] = (
+            "Current billing year: actual cost so far + seasonal model of the "
+            "remaining months, net of projected solar injection revenue."
+        )
+        return attrs
+
+
 class AccumulatedCostSensor(BelgiumEnergyCostSensor):
     """True running cost (EUR), accumulated at the price each kWh was used.
 
@@ -1588,6 +1854,7 @@ async def async_setup_entry(
 
     # --- Solar export ---
     export_revenue: ElectricityExportRevenueSensor | None = None
+    inj_price: TotalElectricityInjectionPriceSensor | None = None
     if has_solar:
         inj_price = TotalElectricityInjectionPriceSensor(hass, conf, entry_id, throttle)
         export_total = ElectricityExportTotalSensor(hass, conf, entry_id, throttle, elec_export)
@@ -1681,16 +1948,17 @@ async def async_setup_entry(
         )
 
         elec_start: date = conf[CONF_ELECTRICITY][CONF_CONTRACT_START_DATE]
+        elec_current = ContractYearCurrentSensor(
+            hass, conf, entry_id, throttle,
+            utility=UTILITY_ELEC, start=elec_start, history=history,
+            cumulative_metrics=elec_metrics, cost_fn=_elec_cost_fn,
+            price_sensors=_elec_price_sensors,
+            name="Electricity Cost This Billing Period",
+            uid="electricity_cost_current_contract_year",
+            icon="mdi:calendar-clock",
+        )
         sensors += [
-            ContractYearCurrentSensor(
-                hass, conf, entry_id, throttle,
-                utility=UTILITY_ELEC, start=elec_start, history=history,
-                cumulative_metrics=elec_metrics, cost_fn=_elec_cost_fn,
-                price_sensors=_elec_price_sensors,
-                name="Electricity Cost This Billing Period",
-                uid="electricity_cost_current_contract_year",
-                icon="mdi:calendar-clock",
-            ),
+            elec_current,
             ContractYearHistorySensor(
                 hass, conf, entry_id, throttle,
                 utility=UTILITY_ELEC, start=elec_start, history=history,
@@ -1716,16 +1984,17 @@ async def async_setup_entry(
                 return energy + fixed
 
             gas_start = conf[CONF_GAS].get(CONF_CONTRACT_START_DATE, elec_start)
+            gas_current = ContractYearCurrentSensor(
+                hass, conf, entry_id, throttle,
+                utility=UTILITY_GAS, start=gas_start, history=history,
+                cumulative_metrics=gas_metrics, cost_fn=_gas_cost_fn,
+                price_sensors=[gas_price_kwh],
+                name="Gas Cost This Billing Period",
+                uid="gas_cost_current_contract_year",
+                icon="mdi:calendar-clock",
+            )
             sensors += [
-                ContractYearCurrentSensor(
-                    hass, conf, entry_id, throttle,
-                    utility=UTILITY_GAS, start=gas_start, history=history,
-                    cumulative_metrics=gas_metrics, cost_fn=_gas_cost_fn,
-                    price_sensors=[gas_price_kwh],
-                    name="Gas Cost This Billing Period",
-                    uid="gas_cost_current_contract_year",
-                    icon="mdi:calendar-clock",
-                ),
+                gas_current,
                 ContractYearHistorySensor(
                     hass, conf, entry_id, throttle,
                     utility=UTILITY_GAS, start=gas_start, history=history,
@@ -1735,6 +2004,33 @@ async def async_setup_entry(
                     icon="mdi:history",
                 ),
             ]
+
+        # --- Seasonal year-end projection (solar-aware) -----------------
+        # Projects the CURRENT billing year: actual cost so far + a seasonal
+        # model of the remaining months (see projection.py). Unlike the
+        # "estimated annual" sensors these stay honest through regime changes
+        # (e.g. a mid-contract solar installation).
+        elec_proj = ElectricityProjectedYearEndCostSensor(
+            hass, conf, entry_id, throttle,
+            start=elec_start, history=history,
+            cumulative_metrics=elec_metrics, current_sensor=elec_current,
+            meter_type=meter_type, costs=elec_costs,
+            peak_price=peak_price, offpeak_price=offpeak_price,
+            single_price=single_price, inj_price=inj_price,
+        )
+        sensors.append(elec_proj)
+        gas_proj: GasProjectedYearEndCostSensor | None = None
+        if has_gas and gas_total is not None:
+            gas_proj = GasProjectedYearEndCostSensor(
+                hass, conf, entry_id, throttle,
+                start=gas_start, history=history,
+                cumulative_metrics=gas_metrics, current_sensor=gas_current,
+                costs=gas_costs, gas_price_kwh=gas_price_kwh,
+            )
+            sensors.append(gas_proj)
+        sensors.append(
+            TotalProjectedYearEndCostSensor(hass, conf, entry_id, throttle, elec_proj, gas_proj)
+        )
 
         # Stash for the close/undo services (registered in __init__.py).
         # Each utility provides: start date, cumulative metrics (for the

@@ -2,6 +2,43 @@
 
 All notable changes to the Belgium Energy Costs integration are documented here.
 
+## [5.11.0] - 2026-08-01
+
+Solar-aware year-end projection — honest estimates through a mid-contract solar installation.
+
+### Added
+- **Projected year-end cost sensors.** `sensor.electricity_projected_year_end_cost`,
+  `sensor.gas_projected_year_end_cost`, and `sensor.total_projected_year_end_cost`
+  project the **current billing year**: the actual (frozen) cost so far this period
+  plus a month-by-month seasonal model of the remaining months. Unlike the
+  "estimated annual" sensors (lifetime average × 12), these stay honest when the
+  household changes regime — the motivating case being a solar + battery
+  installation, where history over-predicts and the summer run-rate under-predicts
+  winter. Electricity models remaining import as
+  `load(m) − self-consumed PV(m)` using Belgian seasonal shapes (Synergrid
+  residential load, PVGIS Brussels PV yield, Belgian gas heating profile — all in
+  the new `projection.py`, normalised and calibratable). The total sensor is **net
+  of projected solar injection revenue** (gross + per-utility breakdown in
+  attributes; every monthly model row exposed for inspection).
+- **Annual PV generation estimate** (kWh/year) in the solar setup step and options
+  flow — anchors the PV term of the projection. `0` disables the PV term, cleanly
+  degrading to a seasonal (non-solar) projection.
+- **Solar / injection tracking in the options flow.** Households that install
+  panels mid-contract can now enable export tracking (sensor, baseline at
+  installation, PV estimate) without deleting and re-adding the integration.
+
+## [5.10.0] - 2026-06-13
+
+Wallonia grid-cost support (ORES defaults). _(Entry backfilled — released without
+a changelog entry.)_
+
+### Added
+- Walloon region enabled with ORES default tariffs (largest DSO, ~75% of
+  Wallonia), from the ENGIE Wallonia prices & conditions sheets. Other Walloon
+  DSOs (RESA / AIEG / AIESH / Régie de Wavre) documented in `const.py` for manual
+  adjustment. Setup and options cost steps pull region-aware defaults;
+  Brussels values unchanged.
+
 ## [5.9.0] - 2026-06-04
 
 Per-billing-period tracking, accurate cost accounting, and a ready-made dashboard.

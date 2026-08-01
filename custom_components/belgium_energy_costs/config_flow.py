@@ -41,6 +41,7 @@ from .const import (
     CONF_COSTS,
     CONF_CONVERSION_FACTOR,
     CONF_BASELINE_READING_M3,
+    CONF_PV_ANNUAL_KWH,
     METER_TYPE_SINGLE,
     METER_TYPE_BI_HORAIRE,
     REGION_BRUSSELS,
@@ -360,6 +361,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not errors:
                     self.config_data["export_sensor"] = export_sensor
                     self.config_data["export_baseline"] = user_input.get("export_baseline", 0)
+                    self.config_data["pv_annual_kwh"] = user_input.get(CONF_PV_ANNUAL_KWH, 0)
                     return await self.async_step_electricity_costs()
             else:
                 return await self.async_step_electricity_costs()
@@ -371,6 +373,9 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional("export_sensor"): EntitySelector(EntitySelectorConfig(domain="sensor")),
                 vol.Optional("export_baseline", default=0): NumberSelector(
                     NumberSelectorConfig(min=0, max=999999, mode=NumberSelectorMode.BOX, unit_of_measurement="kWh")
+                ),
+                vol.Optional(CONF_PV_ANNUAL_KWH, default=0): NumberSelector(
+                    NumberSelectorConfig(min=0, max=99999, mode=NumberSelectorMode.BOX, unit_of_measurement="kWh/year")
                 ),
             }),
             errors=errors,
@@ -554,6 +559,7 @@ class BelgiumEnergyCostsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self.config_data.get("has_solar"):
             elec_export[CONF_P1_SENSORS] = {SENSOR_TOTAL: self.config_data["export_sensor"]}
             elec_export[CONF_BASELINE_READINGS] = {SENSOR_TOTAL: self.config_data["export_baseline"]}
+            elec_export[CONF_PV_ANNUAL_KWH] = self.config_data.get("pv_annual_kwh", 0)
 
         electricity = {
             CONF_CONTRACT_START_DATE: self.config_data["elec_contract_start_date"].isoformat(),
@@ -609,7 +615,75 @@ class BelgiumEnergyCostsOptionsFlow(config_entries.OptionsFlow):
         """Show the options menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["engie_sensors", "electricity_costs", "gas_costs", "gas_reading", "gas_conversion"],
+            menu_options=["engie_sensors", "electricity_costs", "gas_costs", "gas_reading", "gas_conversion", "solar_export"],
+        )
+
+    async def async_step_solar_export(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Enable/adjust solar export tracking after initial setup.
+
+        Mirrors the setup flow's solar step so a household that installs
+        panels mid-contract doesn't have to delete and re-add the integration.
+        """
+        errors: dict[str, str] = {}
+        export_conf = self.config_entry.data[CONF_ELECTRICITY].get(CONF_EXPORT, {})
+
+        if user_input is not None:
+            has_solar = user_input.get("has_solar", False)
+            export_sensor = user_input.get("export_sensor")
+            if has_solar:
+                if not export_sensor:
+                    errors["export_sensor"] = "required"
+                elif not self.hass.states.get(export_sensor):
+                    errors["export_sensor"] = "entity_not_found"
+            if not errors:
+                new_export: dict[str, Any] = {CONF_ENABLED: has_solar}
+                if has_solar:
+                    new_export[CONF_P1_SENSORS] = {SENSOR_TOTAL: export_sensor}
+                    new_export[CONF_BASELINE_READINGS] = {
+                        SENSOR_TOTAL: user_input.get("export_baseline", 0)
+                    }
+                    new_export[CONF_PV_ANNUAL_KWH] = user_input.get(CONF_PV_ANNUAL_KWH, 0)
+                new_data = copy.deepcopy(dict(self.config_entry.data))
+                new_data[CONF_ELECTRICITY][CONF_EXPORT] = new_export
+                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+                return self.async_create_entry(title="", data={})
+
+        cur_sensors = export_conf.get(CONF_P1_SENSORS, {})
+        cur_baselines = export_conf.get(CONF_BASELINE_READINGS, {})
+        schema_fields: dict[Any, Any] = {
+            vol.Required("has_solar", default=export_conf.get(CONF_ENABLED, False)): BooleanSelector(),
+        }
+        if cur_sensors.get(SENSOR_TOTAL):
+            schema_fields[vol.Optional("export_sensor", default=cur_sensors[SENSOR_TOTAL])] = EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            )
+        else:
+            schema_fields[vol.Optional("export_sensor")] = EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            )
+        schema_fields[vol.Optional("export_baseline", default=cur_baselines.get(SENSOR_TOTAL, 0))] = NumberSelector(
+            NumberSelectorConfig(min=0, max=999999, mode=NumberSelectorMode.BOX, unit_of_measurement="kWh")
+        )
+        schema_fields[vol.Optional(CONF_PV_ANNUAL_KWH, default=export_conf.get(CONF_PV_ANNUAL_KWH, 0))] = NumberSelector(
+            NumberSelectorConfig(min=0, max=99999, mode=NumberSelectorMode.BOX, unit_of_measurement="kWh/year")
+        )
+
+        return self.async_show_form(
+            step_id="solar_export",
+            data_schema=vol.Schema(schema_fields),
+            errors=errors,
+            description_placeholders={
+                "note": (
+                    "Solar / injection tracking. Pick your P1 export (injection) sensor and, "
+                    "if the panels were installed after the meter, set the baseline to the "
+                    "export reading at installation so pre-solar counts are excluded.\n"
+                    "The annual PV estimate (kWh/year) feeds the seasonal year-end projection "
+                    "— a summer month's generation ÷ 0.12 is a good first guess; 0 disables "
+                    "the PV term."
+                ),
+            },
         )
 
     async def async_step_engie_sensors(

@@ -16,6 +16,10 @@ CONF_BASELINE_READINGS = "baseline_readings"
 CONF_COSTS = "costs"
 CONF_CONVERSION_FACTOR = "conversion_factor"
 CONF_BASELINE_READING_M3 = "baseline_reading_m3"
+# User's estimate of annual PV generation (kWh/year), stored under the
+# electricity export config. Feeds the seasonal year-end projection; 0 = no PV
+# term (the projection degrades to a seasonal load-only model).
+CONF_PV_ANNUAL_KWH = "pv_annual_generation_kwh"
 
 # Regions
 REGION_BRUSSELS = "brussels"
@@ -164,6 +168,9 @@ SENSOR_GAS_TOTAL_COST = "gas_total_cost_since_contract_start"
 SENSOR_GAS_ANNUAL_COST = "gas_estimated_annual_cost"
 SENSOR_TOTAL_ENERGY_COST = "total_energy_cost_since_contract_start"
 SENSOR_TOTAL_ANNUAL_COST = "total_estimated_annual_energy_cost"
+SENSOR_ELEC_PROJECTED_YEAR = "electricity_projected_year_end_cost"
+SENSOR_GAS_PROJECTED_YEAR = "gas_projected_year_end_cost"
+SENSOR_TOTAL_PROJECTED_YEAR = "total_projected_year_end_cost"
 
 
 def get_gas_meter_entity_id(entry_id: str) -> str:
