@@ -261,6 +261,19 @@ async def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> N
                     except (ValueError, TypeError):
                         pass
 
+            # Guard against a stale or future period_end. A left-over picker
+            # value (typically the PREVIOUS close's date) resolves ≤ the last
+            # period_end; meter reads are never in the future. Either case
+            # falls back to today rather than corrupting period boundaries.
+            lower_bound = history.last_period_end(util) or start
+            if period_end <= lower_bound or period_end > today:
+                _LOGGER.warning(
+                    "close contract year: ignoring implausible period_end %s for "
+                    "'%s' (must be after %s and not in the future); using today",
+                    period_end, util, lower_bound,
+                )
+                period_end = today
+
             next_index = history.completed_year_count(util) + 1
 
             # This year's own consumption = lifetime − previous close cumulative.
@@ -293,6 +306,18 @@ async def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> N
         except Exception:  # noqa: BLE001
             _LOGGER.exception("close contract year failed for utility '%s'", util)
             return False
+
+        # The picker's value has been consumed by this close — clear it so it
+        # can't silently become the next close's period_end. Before the reload,
+        # so RestoreEntity restores the cleared state afterwards.
+        try:
+            picker_entity = hass.data.get(DOMAIN, {}).get(
+                "_close_date_entities", {}
+            ).get(entry_id, {}).get(util)
+            if picker_entity:
+                await picker_entity.async_clear()
+        except Exception:  # noqa: BLE001 - clearing is best-effort
+            _LOGGER.exception("failed to clear %s close-date picker", util)
 
         if reload:
             await hass.config_entries.async_reload(entry_id)

@@ -2,6 +2,17 @@
 
 All notable changes to the Belgium Energy Costs integration are documented here.
 
+## [5.11.1] - 2026-08-01
+
+### Fixed
+- **Stale period-end picker footgun.** The close services read the dashboard
+  date picker as the period_end — but the picker kept its value after a close,
+  so the *previous* close's date would silently be reused for the next one,
+  corrupting period boundaries (and the year-end projection's anchoring).
+  Two-layer fix: the close service now rejects implausible dates (on or before
+  the last period end, or in the future) with a fallback to today, and the
+  picker is automatically cleared after every successful close.
+
 ## [5.11.0] - 2026-08-01
 
 Solar-aware year-end projection — honest estimates through a mid-contract solar installation.

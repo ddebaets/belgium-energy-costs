@@ -78,6 +78,18 @@ class ContractYearCloseDate(DateEntity, RestoreEntity):
             except (ValueError, TypeError):
                 self._attr_native_value = None
         self.async_write_ha_state()
+        # Stash a reference so the close service can clear the picker after a
+        # successful close — a left-over date would otherwise be silently used
+        # as the NEXT close's period_end (a stale-date footgun).
+        self.hass.data.setdefault(DOMAIN, {}).setdefault(
+            "_close_date_entities", {}
+        ).setdefault(self._entry_id, {})[self._utility] = self
+
+    async def async_will_remove_from_hass(self) -> None:
+        await super().async_will_remove_from_hass()
+        self.hass.data.get(DOMAIN, {}).get("_close_date_entities", {}).get(
+            self._entry_id, {}
+        ).pop(self._utility, None)
 
     async def async_set_value(self, value: date) -> None:
         self._attr_native_value = value
@@ -86,3 +98,8 @@ class ContractYearCloseDate(DateEntity, RestoreEntity):
             "Contract-year close date for '%s' set to %s (entry %s)",
             self._utility, value.isoformat(), self._entry_id,
         )
+
+    async def async_clear(self) -> None:
+        """Reset the picker to unset (used after a period close consumes it)."""
+        self._attr_native_value = None
+        self.async_write_ha_state()
